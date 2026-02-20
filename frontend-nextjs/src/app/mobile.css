@@ -1,0 +1,566 @@
+/* Mobile-First Optimizations for CutQ */
+
+/* Reduce motion for mobile devices to improve performance */
+@media (max-width: 640px) {
+  * {
+    animation-duration: 0.3s !important;
+    transition-duration: 0.3s !important;
+  }
+
+  /* Disable complex animations on mobile */
+  .animate-morph,
+  .animate-float,
+  .animate-float-slow,
+  .animate-rotate-slow,
+  .animate-bounce-soft,
+  .animate-glow-pulse,
+  .animate-gradient-slow {
+    animation: none !important;
+  }
+
+  /* Keep only essential animations */
+  .animate-pulse,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-slide-down,
+  .animate-scale-in {
+    animation-duration: 0.3s !important;
+  }
+}
+
+/* Touch-friendly button sizing */
+@media (max-width: 640px) {
+  button {
+    min-height: 44px;
+    /* iOS recommended touch target */
+    min-width: 44px;
+  }
+
+  /* Ensure adequate spacing between interactive elements */
+  .space-y-2>*+* {
+    margin-top: 0.75rem !important;
+  }
+
+  .space-y-3>*+* {
+    margin-top: 1rem !important;
+  }
+}
+
+/* Optimize text readability on mobile */
+@media (max-width: 640px) {
+
+  /* Ensure minimum font sizes for readability */
+  .text-xs {
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .text-sm {
+    font-size: 0.875rem !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Improve contrast for mobile viewing */
+  .text-gray-600 {
+    color: rgb(75 85 99) !important;
+    /* Darker gray for better contrast */
+  }
+
+  .text-gray-500 {
+    color: rgb(107 114 128) !important;
+  }
+}
+
+/* Mobile-specific layout adjustments */
+@media (max-width: 640px) {
+
+  /* Reduce padding on mobile */
+  .p-10 {
+    padding: 1rem !important;
+  }
+
+  .p-8 {
+    padding: 1rem !important;
+  }
+
+  .p-6 {
+    padding: 0.75rem !important;
+  }
+
+  /* Adjust margins */
+  .mb-12 {
+    margin-bottom: 2rem !important;
+  }
+
+  .mb-10 {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .mb-8 {
+    margin-bottom: 1.5rem !important;
+  }
+
+  /* Optimize border radius for mobile */
+  .rounded-4xl {
+    border-radius: 1rem !important;
+  }
+
+  .rounded-3xl {
+    border-radius: 0.75rem !important;
+  }
+
+  .rounded-2xl {
+    border-radius: 0.5rem !important;
+  }
+}
+
+/* Improve mobile form interactions */
+@media (max-width: 640px) {
+
+  /* Ensure form inputs are properly sized */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"] {
+    font-size: 16px !important;
+    /* Prevents zoom on iOS */
+    padding: 0.75rem !important;
+    border-radius: 0.5rem !important;
+  }
+
+  /* Optimize button text */
+  button span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Mobile-specific backdrop blur optimization */
+@media (max-width: 640px) {
+  .backdrop-blur-3xl {
+    backdrop-filter: blur(8px) !important;
+  }
+
+  .backdrop-blur-xl {
+    backdrop-filter: blur(6px) !important;
+  }
+
+  /* Reduce shadow complexity on mobile */
+  .shadow-glass-lg {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .shadow-glow {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+/* Mobile navigation and viewport optimizations */
+@media (max-width: 640px) {
+
+  /* Ensure content doesn't get cut off */
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height for mobile browsers */
+  }
+
+  /* Optimize for mobile safe areas */
+  .p-3 {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .p-4 {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  /* Mobile bottom navigation spacing */
+  .pb-20 {
+    padding-bottom: calc(5rem + max(env(safe-area-inset-bottom), 0.5rem)) !important;
+    /* Space for bottom nav */
+  }
+
+  /* Ensure main content respects safe areas */
+  main {
+    padding-bottom: calc(5rem + max(env(safe-area-inset-bottom), 0.5rem)) !important;
+  }
+
+  /* Enhanced mobile grid layouts */
+  .grid-cols-1 {
+    gap: 1rem !important;
+  }
+
+  /* Mobile card optimizations */
+  .card {
+    border-radius: 1rem !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Mobile text optimizations */
+  .text-4xl {
+    font-size: 1.875rem !important;
+    /* 30px */
+    line-height: 2.25rem !important;
+  }
+
+  .text-3xl {
+    font-size: 1.5rem !important;
+    /* 24px */
+    line-height: 2rem !important;
+  }
+
+  .text-2xl {
+    font-size: 1.25rem !important;
+    /* 20px */
+    line-height: 1.75rem !important;
+  }
+}
+
+/* Performance optimizations for mobile */
+@media (max-width: 640px) {
+
+  /* Reduce GPU usage */
+  .transform {
+    will-change: auto !important;
+  }
+
+  /* Optimize background gradients */
+  .bg-gradient-to-br,
+  .bg-gradient-to-r,
+  .bg-gradient-to-l,
+  .bg-gradient-to-tr {
+    background-attachment: scroll !important;
+  }
+
+  /* Mobile-specific component optimizations */
+  .container-custom {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Enhanced mobile card spacing */
+  .space-y-4>*+* {
+    margin-top: 1rem !important;
+  }
+
+  .space-y-6>*+* {
+    margin-top: 1.5rem !important;
+  }
+
+  .space-y-8>*+* {
+    margin-top: 2rem !important;
+  }
+
+  /* Mobile button optimizations */
+  .btn-lg {
+    padding: 0.875rem 1.5rem !important;
+    font-size: 1rem !important;
+    min-height: 48px !important;
+  }
+
+  .btn-md {
+    padding: 0.75rem 1.25rem !important;
+    font-size: 0.875rem !important;
+    min-height: 44px !important;
+  }
+
+  /* Mobile navigation enhancements */
+  .fixed.bottom-0 {
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+/* Mobile-specific hover states */
+@media (hover: none) and (pointer: coarse) {
+
+  /* Remove hover effects on touch devices */
+  .hover\:scale-105:hover {
+    transform: none !important;
+  }
+
+  .hover\:bg-white\/20:hover {
+    background-color: inherit !important;
+  }
+
+  .group-hover\:scale-110:hover {
+    transform: none !important;
+  }
+
+  .hover\:shadow-hover:hover {
+    box-shadow: inherit !important;
+  }
+
+  /* Use active states instead */
+  .hover\:scale-105:active {
+    transform: scale(0.98) !important;
+  }
+
+  .hover\:bg-white\/20:active {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .hover\:shadow-hover:active {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+}
+
+/* Additional mobile enhancements */
+@media (max-width: 640px) {
+
+  /* Improve mobile scrolling */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* iOS header safe area handling */
+  header {
+    padding-top: max(env(safe-area-inset-top), 0.5rem) !important;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  /* Prevent header from overlapping with status bar */
+  header::before {
+    content: '';
+    display: block;
+    height: env(safe-area-inset-top);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: inherit;
+  }
+
+  /* Mobile-specific line heights */
+  .leading-tight {
+    line-height: 1.3 !important;
+  }
+
+  .leading-snug {
+    line-height: 1.4 !important;
+  }
+
+  /* Mobile image optimizations */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Mobile-specific z-index management */
+  .z-50 {
+    z-index: 9999 !important;
+  }
+
+  /* Enhanced mobile focus states - removed since global focus styles are handled in index.css */
+
+  /* Mobile-specific layout improvements */
+  .section-padding {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  /* Mobile grid improvements */
+  .grid {
+    gap: 1rem !important;
+  }
+
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Mobile typography improvements */
+  h1 {
+    font-size: 1.875rem !important;
+    /* 30px */
+    line-height: 2.25rem !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+    /* 24px */
+    line-height: 2rem !important;
+  }
+
+  h3 {
+    font-size: 1.25rem !important;
+    /* 20px */
+    line-height: 1.75rem !important;
+  }
+
+  /* Mobile card improvements */
+  .card {
+    margin-bottom: 1rem !important;
+  }
+
+  /* Mobile bottom navigation specific */
+  .fixed.bottom-0 {
+    background: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(20px) !important;
+  }
+
+  /* Mobile-specific fixes for common issues */
+  .overflow-hidden {
+    overflow: hidden !important;
+  }
+
+  /* Prevent horizontal scroll on mobile */
+  body {
+    overflow-x: hidden !important;
+  }
+
+  /* Mobile-specific line clamping */
+  .line-clamp-1 {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 1 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+
+  /* Mobile-specific animations */
+  .animate-slide-up {
+    animation: slideUpMobile 0.3s ease-out !important;
+  }
+
+  @keyframes slideUpMobile {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Mobile-specific backdrop blur */
+  .backdrop-blur-xl {
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+  }
+
+  /* Mobile-specific gradient optimizations */
+  .bg-gradient-to-r,
+  .bg-gradient-to-br {
+    background-attachment: scroll !important;
+  }
+
+  /* Mobile search bar optimizations */
+  .search-container {
+    padding: 0.75rem !important;
+  }
+
+  .search-input {
+    font-size: 14px !important;
+    padding: 12px 40px 12px 40px !important;
+  }
+
+  .search-icon {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  /* Mobile salon card optimizations */
+  .salon-card {
+    margin-bottom: 1rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .salon-card-image {
+    height: 120px !important;
+  }
+
+  .salon-card-content {
+    padding: 0.75rem !important;
+  }
+
+  .salon-card-title {
+    font-size: 14px !important;
+    line-height: 1.3 !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .salon-card-location {
+    font-size: 11px !important;
+  }
+
+  .salon-card-services .badge {
+    font-size: 10px !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .salon-card-button {
+    font-size: 12px !important;
+    padding: 0.5rem 1rem !important;
+  }
+
+  /* Mobile grid optimizations */
+  .grid-cols-1 {
+    gap: 0.75rem !important;
+  }
+
+  .grid-cols-2 {
+    gap: 0.5rem !important;
+  }
+
+  /* Mobile stylist card optimizations */
+  .stylist-card {
+    padding: 0.625rem !important;
+    /* 10px */
+    border-radius: 0.75rem !important;
+    /* 12px */
+  }
+
+  .stylist-card .flex {
+    gap: 0.625rem !important;
+    /* 10px */
+  }
+
+  .stylist-card h4 {
+    font-size: 0.875rem !important;
+    /* 14px */
+    line-height: 1.25rem !important;
+  }
+
+  .stylist-card .text-xs {
+    font-size: 0.75rem !important;
+    /* 12px */
+  }
+
+  /* Mobile booking page optimizations */
+  .booking-step-content {
+    padding: 0.75rem !important;
+  }
+
+  .booking-stylist-grid {
+    gap: 0.5rem !important;
+  }
+
+  /* Schedule management mobile optimizations */
+  .schedule-grid {
+    min-width: 800px !important;
+  }
+
+  .schedule-time-slot {
+    min-height: 50px !important;
+  }
+
+  .schedule-booking-card {
+    padding: 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+
+
+}

@@ -1,0 +1,29 @@
+{
+  "name": "mobile-capacitor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "init": "npx cap init",
+    "add:android": "npx cap add android",
+    "sync": "npx cap sync",
+    "open:android": "npx cap open android",
+    "build:android": "npx cap sync && npx cap open android",
+    "run:android:reload": "npx cap sync && npx cap run android -l",
+    "open:ios": "npx cap open ios",
+    "build:ios": "npx cap sync && npx cap open ios",
+    "run:ios:reload": "npx cap sync && npx cap run ios -l --target=DD128A09-BBC3-4E7F-98A4-E26CEDF14678"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/ios": "^7.4.4",
+    "@capacitor/network": "^7.0.2",
+    "@capacitor/splash-screen": "^7.0.3"
+  }
+}

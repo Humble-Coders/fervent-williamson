@@ -1,0 +1,1941 @@
+openapi: 3.0.3
+info:
+  title: CutQ Management API
+  description: |
+    Comprehensive API for CutQ (beauty business) booking and management system.
+
+    ## Features
+    - CutQ management with auto-increment display IDs
+    - SEO-friendly URLs for better search indexing
+    - Service booking and management with verification codes
+    - Review and rating system
+    - Organized file upload capabilities
+    - Special offers and promotions
+    - Social authentication (Google, Facebook)
+    - Multi-role authentication (Admin/Salon Owner/Customer)
+
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    ## SEO-Friendly URLs
+    The API supports SEO-optimized URLs for better search engine indexing:
+    - CutQ URLs: `/salons/{salon-name}/{display-id}` (e.g., `/salons/beautiful-cuts/123`)
+    - Service URLs: `/services/{category}/{service-id}` (e.g., `/services/hair/456`)
+    - Backward compatibility maintained for legacy URLs
+
+    ## Display IDs
+    The API supports both UUID and auto-increment display IDs for user-friendly URLs:
+    - UUIDs: `f12ebd4a-94b0-4162-bd7e-37858ea61d93`
+    - Display IDs: `1`, `2`, `3`
+
+  version: 1.2.0
+  contact:
+    name: CutQ Management API
+    email: support@cutq.store
+
+servers:
+  - url: http://localhost:3002/api/v1
+    description: Development server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Authentication
+    description: User authentication and authorization
+  - name: CutQs
+    description: CutQ (beauty business) management operations
+  - name: Services
+    description: Service management operations
+  - name: Categories
+    description: Service category operations
+  - name: Bookings
+    description: Booking management operations with verification codes
+  - name: Reviews
+    description: Review and rating operations
+  - name: Offers
+    description: Special offers and promotions
+  - name: Upload
+    description: Organized file upload operations
+  - name: Payment Methods
+    description: Payment method configuration management (Admin)
+  - name: Booking Configuration
+    description: Booking configuration management
+  - name: Admin
+    description: Administrative operations
+  - name: Social Auth
+    description: Social authentication endpoints
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+          description: Response data (varies by endpoint)
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "e7fbf45c-ef2e-4b74-8ab4-13630d072277"
+        name:
+          type: string
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          example: "john@example.com"
+        phone:
+          type: string
+          nullable: true
+          example: "+1-555-0123"
+        role:
+          type: string
+          enum: [CUSTOMER, SALON_OWNER, ADMIN]
+          example: "CUSTOMER"
+        createdAt:
+          type: string
+          format: date-time
+
+    Salon:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayId:
+          type: integer
+          example: 1
+          description: "Auto-increment ID for user-friendly URLs"
+        name:
+          type: string
+          example: "Beautiful Cuts"
+        description:
+          type: string
+          example: "Where beauty meets luxury - Professional beauty services"
+        address:
+          type: string
+          example: "123 Beauty Street, Fashion District"
+        latitude:
+          type: number
+          format: float
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: float
+          nullable: true
+          example: -74.0060
+        phone:
+          type: string
+          example: "+1-555-0123"
+        email:
+          type: string
+          format: email
+          example: "info@beautifulcuts.com"
+        rating:
+          type: number
+          format: float
+          example: 4.8
+        reviewCount:
+          type: integer
+          example: 150
+        images:
+          type: array
+          items:
+            type: string
+          example: ["/uploads/cutqs/beautiful-cuts-1/salon1.jpg", "/uploads/cutqs/beautiful-cuts-1/salon2.jpg"]
+          description: "Array of image URLs for auto-scrolling gallery"
+        featured:
+          type: boolean
+          example: true
+        isOpen:
+          type: boolean
+          example: true
+        distance:
+          type: string
+          nullable: true
+          example: "2.5 mi"
+          description: "Calculated distance from user location"
+        specialties:
+          type: array
+          items:
+            type: string
+          example: ["Hair", "Nails", "Facial", "Massage"]
+        amenities:
+          type: array
+          items:
+            type: string
+          example: ["WiFi", "Parking", "AC", "Refreshments"]
+        teamSize:
+          type: integer
+          example: 8
+        yearsInBusiness:
+          type: integer
+          example: 5
+        certifications:
+          type: array
+          items:
+            type: string
+          example: ["Licensed Cosmetology", "Organic Certified"]
+        workingHours:
+          type: object
+          example: {
+            "monday": {"open": "09:00", "close": "18:00"},
+            "tuesday": {"open": "09:00", "close": "18:00"},
+            "wednesday": {"open": "09:00", "close": "18:00"},
+            "thursday": {"open": "09:00", "close": "20:00"},
+            "friday": {"open": "09:00", "close": "20:00"},
+            "saturday": {"open": "08:00", "close": "18:00"},
+            "sunday": {"open": "10:00", "close": "16:00"}
+          }
+        slotDuration:
+          type: integer
+          example: 30
+          description: "Appointment slot duration in minutes"
+        breakDuration:
+          type: integer
+          example: 15
+          description: "Break duration between appointments in minutes"
+        advanceBookingDays:
+          type: integer
+          example: 30
+          description: "How many days in advance bookings are allowed"
+        minimumNoticeHours:
+          type: integer
+          example: 2
+          description: "Minimum notice required for bookings in hours"
+        enabledPaymentMethods:
+          type: array
+          items:
+            type: string
+          example: ["card", "wallet", "cash"]
+          description: "Enabled payment methods for this CutQ"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayId:
+          type: integer
+          example: 1
+          description: "Auto-increment ID for user-friendly URLs"
+        name:
+          type: string
+          example: "Haircut & Style"
+        description:
+          type: string
+          example: "Professional haircut with styling"
+        duration:
+          type: integer
+          example: 60
+          description: "Duration in minutes"
+        price:
+          type: string
+          example: "50"
+          description: "Price as decimal string"
+        emoji:
+          type: string
+          example: "✂️"
+        salonId:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+          example: true
+
+    ServiceCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Hair"
+        icon:
+          type: string
+          example: "Scissors"
+        emoji:
+          type: string
+          example: "💇‍♀️"
+        description:
+          type: string
+          example: "Cuts, colors & styling"
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayId:
+          type: integer
+          example: 1
+          description: "Auto-increment ID for user-friendly URLs"
+        salonId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        stylistId:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Optional stylist assignment"
+        date:
+          type: string
+          format: date
+          example: "2025-01-15"
+        startTime:
+          type: string
+          format: date-time
+          example: "2025-01-15T14:30:00Z"
+        endTime:
+          type: string
+          format: date-time
+          example: "2025-01-15T15:30:00Z"
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, CANCELLED, COMPLETED]
+          example: "CONFIRMED"
+        verificationCode:
+          type: string
+          nullable: true
+          example: "ABC123"
+          description: "Code generated for customer verification when arriving"
+        notes:
+          type: string
+          nullable: true
+          example: "Please call before arriving"
+        totalAmount:
+          type: number
+          format: float
+          example: 50.00
+        discountAmount:
+          type: number
+          format: float
+          example: 5.00
+          default: 0
+        finalAmount:
+          type: number
+          format: float
+          example: 45.00
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        salonId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        comment:
+          type: string
+          example: "Excellent service!"
+        createdAt:
+          type: string
+          format: date-time
+
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: "New Client Special"
+        description:
+          type: string
+          example: "20% off your first visit"
+        type:
+          type: string
+          enum: [PERCENTAGE, FIXED_AMOUNT, FREE_SERVICE, BOGO]
+          example: "PERCENTAGE"
+        value:
+          type: number
+          example: 20
+        isActive:
+          type: boolean
+          example: true
+
+    PaymentMethodConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Credit/Debit Card"
+        type:
+          type: string
+          example: "card"
+        icon:
+          type: string
+          example: "CreditCard"
+        emoji:
+          type: string
+          example: "💳"
+        description:
+          type: string
+          example: "Visa, Mastercard, Amex"
+        isActive:
+          type: boolean
+          example: true
+        sortOrder:
+          type: integer
+          example: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BookingConfig:
+      type: object
+      properties:
+        salon:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayId:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: "Glamour Lounge"
+        slotDuration:
+          type: integer
+          example: 30
+          description: "Booking slot duration in minutes"
+        breakDuration:
+          type: integer
+          example: 0
+          description: "Break between appointments in minutes"
+        advanceBookingDays:
+          type: integer
+          example: 30
+          description: "How many days in advance can book"
+        minimumNoticeHours:
+          type: integer
+          example: 2
+          description: "Minimum notice required in hours"
+        bufferTime:
+          type: integer
+          example: 15
+          description: "Buffer time between appointments in minutes"
+        maxBookingsPerDay:
+          type: integer
+          example: 20
+          description: "Maximum bookings per day"
+        allowSameDayBooking:
+          type: boolean
+          example: true
+          description: "Allow same day bookings"
+        workingHours:
+          type: object
+          description: "Working hours for each day of the week"
+        paymentMethods:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentMethodConfig'
+          description: "Available payment methods for this salon"
+        timeSlots:
+          type: array
+          items:
+            type: string
+          example: ["09:00", "09:30", "10:00", "10:30"]
+          description: "Available time slots based on salon configuration"
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the server is running
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Server is running"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  environment:
+                    type: string
+                    example: "development"
+
+  /:
+    get:
+      tags:
+        - Health
+      summary: API welcome message
+      description: Get API information and version
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Welcome to Salon Management API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  documentation:
+                    type: string
+                    example: "/api/v1/docs"
+
+  /test:
+    get:
+      tags:
+        - Health
+      summary: Test endpoint
+      description: Test if API is working
+      responses:
+        '200':
+          description: API is working
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "API is working!"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # Authentication Endpoints
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  format: email
+                  example: "john@example.com"
+                password:
+                  type: string
+                  minLength: 6
+                  example: "password123"
+                phone:
+                  type: string
+                  example: "+1-555-0123"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  message:
+                    type: string
+                    example: "User registered successfully"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      description: Authenticate user and get JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "john@example.com"
+                password:
+                  type: string
+                  example: "password123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  message:
+                    type: string
+                    example: "Login successful"
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Social Authentication Endpoints
+  /auth/google:
+    get:
+      tags:
+        - Social Auth
+      summary: Google OAuth login
+      description: |
+        Initiate Google OAuth authentication flow. Redirects user to Google's
+        authorization server for authentication.
+      responses:
+        '302':
+          description: Redirect to Google OAuth
+          headers:
+            Location:
+              description: Google OAuth authorization URL
+              schema:
+                type: string
+                example: "https://accounts.google.com/oauth/authorize?..."
+
+  /auth/facebook:
+    get:
+      tags:
+        - Social Auth
+      summary: Facebook OAuth login
+      description: |
+        Initiate Facebook OAuth authentication flow. Redirects user to Facebook's
+        authorization server for authentication.
+      responses:
+        '302':
+          description: Redirect to Facebook OAuth
+          headers:
+            Location:
+              description: Facebook OAuth authorization URL
+              schema:
+                type: string
+                example: "https://www.facebook.com/v18.0/dialog/oauth?..."
+
+  /auth/callback/google:
+    get:
+      tags:
+        - Social Auth
+      summary: Google OAuth callback
+      description: |
+        Handle Google OAuth callback and complete authentication process.
+        This endpoint is called by Google after user authorization.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Authorization code from Google
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: State parameter for CSRF protection
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to frontend with authentication result
+          headers:
+            Location:
+              description: Frontend URL with auth token or error
+              schema:
+                type: string
+                example: "https://cutq.store/auth/callback?token=..."
+
+  /auth/callback/facebook:
+    get:
+      tags:
+        - Social Auth
+      summary: Facebook OAuth callback
+      description: |
+        Handle Facebook OAuth callback and complete authentication process.
+        This endpoint is called by Facebook after user authorization.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Authorization code from Facebook
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: State parameter for CSRF protection
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to frontend with authentication result
+          headers:
+            Location:
+              description: Frontend URL with auth token or error
+              schema:
+                type: string
+                example: "https://cutq.store/auth/callback?token=..."
+
+  # OTP Authentication Endpoints
+  /auth/send-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Send OTP to phone
+      description: Send one-time password to user's phone number for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+              properties:
+                phone:
+                  type: string
+                  example: "+1234567890"
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent successfully"
+        '400':
+          description: Invalid phone number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verify-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Verify OTP and authenticate
+      description: Verify OTP code and complete phone-based authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - otp
+              properties:
+                phone:
+                  type: string
+                  example: "+1234567890"
+                otp:
+                  type: string
+                  example: "123456"
+                name:
+                  type: string
+                  description: Required for new users
+                  example: "John Doe"
+      responses:
+        '200':
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      token:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  message:
+                    type: string
+                    example: "Authentication successful"
+        '400':
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # CutQ Endpoints
+  /salons:
+    get:
+      tags:
+        - CutQs
+      summary: Get all CutQs
+      description: |
+        Retrieve a list of all CutQs with their details. Supports filtering and pagination
+        for better performance and user experience.
+      parameters:
+        - name: search
+          in: query
+          description: Search CutQs by name or description
+          schema:
+            type: string
+            example: "hair salon"
+        - name: category
+          in: query
+          description: Filter by service category
+          schema:
+            type: string
+            example: "hair"
+        - name: featured
+          in: query
+          description: Filter by featured status
+          schema:
+            type: boolean
+            example: true
+        - name: latitude
+          in: query
+          description: User's latitude for distance calculation
+          schema:
+            type: number
+            format: float
+            example: 40.7128
+        - name: longitude
+          in: query
+          description: User's longitude for distance calculation
+          schema:
+            type: number
+            format: float
+            example: -74.0060
+        - name: radius
+          in: query
+          description: Search radius in kilometers
+          schema:
+            type: number
+            format: float
+            example: 10
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: CutQs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Salon'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 150
+                      pages:
+                        type: integer
+                        example: 8
+                  message:
+                    type: string
+                    example: "CutQs retrieved successfully"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /salons/by-name/{salonName}/{id}:
+    get:
+      tags:
+        - CutQs
+      summary: Get CutQ by SEO-friendly URL
+      description: |
+        Retrieve a specific CutQ using SEO-friendly URL format. This endpoint supports
+        the new SEO-optimized URL structure for better search engine indexing.
+
+        Examples:
+        - `/salons/by-name/beautiful-cuts/1` (SEO-friendly with display ID)
+        - `/salons/by-name/hair-studio/856b2dee-18d6-407b-aa9b-1e30af346044` (with UUID)
+      parameters:
+        - name: salonName
+          in: path
+          required: true
+          description: SEO-friendly salon name slug
+          schema:
+            type: string
+            example: "beautiful-cuts"
+        - name: id
+          in: path
+          required: true
+          description: Salon ID (UUID or display ID)
+          schema:
+            oneOf:
+              - type: string
+                format: uuid
+                example: "856b2dee-18d6-407b-aa9b-1e30af346044"
+              - type: integer
+                example: 1
+      responses:
+        '200':
+          description: CutQ retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Salon'
+                  message:
+                    type: string
+                    example: "Business retrieved successfully"
+        '404':
+          description: CutQ not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /salons/{id}:
+    get:
+      tags:
+        - CutQs
+      summary: Get CutQ by ID (Legacy)
+      description: |
+        Retrieve a specific CutQ by ID. Supports both UUID and auto-increment display ID.
+        This is the legacy endpoint maintained for backward compatibility.
+
+        Examples:
+        - `/salons/1` (display ID)
+        - `/salons/856b2dee-18d6-407b-aa9b-1e30af346044` (UUID)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Salon ID (UUID or display ID)
+          schema:
+            oneOf:
+              - type: string
+                format: uuid
+                example: "856b2dee-18d6-407b-aa9b-1e30af346044"
+              - type: integer
+                example: 1
+      responses:
+        '200':
+          description: CutQ retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Salon'
+        '404':
+          description: CutQ not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Service Endpoints
+  /services:
+    get:
+      tags:
+        - Services
+      summary: Get all services
+      description: Retrieve a list of all services with optional filters
+      parameters:
+        - name: salonId
+          in: query
+          description: Filter services by salon ID
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          description: Filter services by category ID
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Services retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+                  message:
+                    type: string
+                    example: "Services retrieved successfully"
+
+  /services/category/{categorySlug}:
+    get:
+      tags:
+        - Services
+      summary: Get services by category (SEO-friendly)
+      description: |
+        Retrieve services by category using SEO-friendly URL format. This endpoint supports
+        the new SEO-optimized URL structure for better search engine indexing.
+
+        Examples:
+        - `/services/category/hair` (hair services)
+        - `/services/category/facial` (facial services)
+        - `/services/category/nails` (nail services)
+      parameters:
+        - name: categorySlug
+          in: path
+          required: true
+          description: SEO-friendly category slug
+          schema:
+            type: string
+            example: "hair"
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: search
+          in: query
+          description: Search services by name or description
+          schema:
+            type: string
+            example: "haircut"
+        - name: minPrice
+          in: query
+          description: Minimum price filter
+          schema:
+            type: number
+            format: float
+            example: 20.00
+        - name: maxPrice
+          in: query
+          description: Maximum price filter
+          schema:
+            type: number
+            format: float
+            example: 100.00
+        - name: sortBy
+          in: query
+          description: Sort services by criteria
+          schema:
+            type: string
+            enum: [popular, price_asc, price_desc, rating, newest]
+            default: popular
+      responses:
+        '200':
+          description: Services retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 50
+                      pages:
+                        type: integer
+                        example: 3
+                  category:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "cat-123"
+                      name:
+                        type: string
+                        example: "Hair Services"
+                      description:
+                        type: string
+                        example: "Professional hair cutting and styling services"
+                      emoji:
+                        type: string
+                        example: "💇"
+                      icon:
+                        type: string
+                        example: "scissors"
+                  message:
+                    type: string
+                    example: "Services retrieved successfully"
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /services/{id}:
+    get:
+      tags:
+        - Services
+      summary: Get service by ID
+      description: |
+        Retrieve a specific service by ID. Supports both UUID and auto-increment display ID.
+
+        Examples:
+        - `/services/1` (display ID)
+        - `/services/a3e99e2f-7399-4c25-96de-c680e38e0ab4` (UUID)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Service ID (UUID or display ID)
+          schema:
+            oneOf:
+              - type: string
+                format: uuid
+                example: "a3e99e2f-7399-4c25-96de-c680e38e0ab4"
+              - type: integer
+                example: 1
+      responses:
+        '200':
+          description: Service retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Service'
+        '404':
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Category Endpoints
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all service categories
+      description: Retrieve a list of all service categories
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceCategory'
+                  message:
+                    type: string
+                    example: "Service categories retrieved successfully"
+
+  # Booking Endpoints
+  /bookings:
+    post:
+      tags:
+        - Bookings
+      summary: Create a new booking
+      description: Create a new booking (requires authentication)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - salonId
+                - serviceId
+                - date
+                - time
+              properties:
+                salonId:
+                  type: string
+                  example: "856b2dee-18d6-407b-aa9b-1e30af346044"
+                serviceId:
+                  type: string
+                  example: "a3e99e2f-7399-4c25-96de-c680e38e0ab4"
+                stylistId:
+                  type: string
+                  nullable: true
+                  example: "stylist-uuid"
+                date:
+                  type: string
+                  format: date
+                  example: "2025-01-15"
+                time:
+                  type: string
+                  example: "14:30"
+                notes:
+                  type: string
+                  example: "Please call before arriving"
+      responses:
+        '201':
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Booking'
+                  message:
+                    type: string
+                    example: "Booking created successfully"
+        '400':
+          description: Validation error or booking conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bookings/user/{userId}:
+    get:
+      tags:
+        - Bookings
+      summary: Get user's bookings
+      description: Retrieve all bookings for a specific user (requires authentication)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User bookings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Booking'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bookings/availability:
+    get:
+      tags:
+        - Bookings
+      summary: Get available time slots
+      description: |
+        Get available time slots for booking at a specific CutQ for a given date.
+        Supports filtering by service and stylist for more accurate availability.
+      parameters:
+        - name: salonId
+          in: query
+          required: true
+          description: CutQ ID
+          schema:
+            type: string
+            example: "856b2dee-18d6-407b-aa9b-1e30af346044"
+        - name: serviceId
+          in: query
+          required: true
+          description: Service ID
+          schema:
+            type: string
+            example: "a3e99e2f-7399-4c25-96de-c680e38e0ab4"
+        - name: stylistId
+          in: query
+          description: Specific stylist ID (optional)
+          schema:
+            type: string
+            example: "stylist-uuid"
+        - name: date
+          in: query
+          required: true
+          description: Date for availability check (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2025-01-15"
+      responses:
+        '200':
+          description: Available time slots retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      availableSlots:
+                        type: array
+                        items:
+                          type: string
+                        example: ["09:00", "09:30", "10:00", "14:00", "15:30"]
+                      date:
+                        type: string
+                        format: date
+                        example: "2025-01-15"
+                      salonWorkingHours:
+                        type: object
+                        properties:
+                          open:
+                            type: string
+                            example: "09:00"
+                          close:
+                            type: string
+                            example: "18:00"
+                  message:
+                    type: string
+                    example: "Available time slots retrieved successfully"
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bookings/{id}/status:
+    patch:
+      tags:
+        - Bookings
+      summary: Update booking status
+      description: |
+        Update booking status with verification code support. Used for confirming
+        appointments when customers arrive at the CutQ.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "booking-uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [pending, confirmed, cancelled, completed]
+                  example: "completed"
+                verificationCode:
+                  type: string
+                  description: Required when marking booking as completed
+                  example: "ABC123"
+                notes:
+                  type: string
+                  description: Optional notes for status change
+                  example: "Customer arrived on time"
+      responses:
+        '200':
+          description: Booking status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Booking'
+                  message:
+                    type: string
+                    example: "Booking status updated successfully"
+        '400':
+          description: Invalid verification code or status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Review Endpoints
+  /reviews/salon/{salonId}:
+    get:
+      tags:
+        - Reviews
+      summary: Get reviews for a salon
+      description: Retrieve reviews for a specific salon with pagination
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          description: Salon ID
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Number of reviews per page
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      reviews:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Review'
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          total:
+                            type: integer
+                            example: 50
+                          pages:
+                            type: integer
+                            example: 5
+                      averageRating:
+                        type: number
+                        example: 4.5
+                      totalReviews:
+                        type: integer
+                        example: 50
+
+  /reviews:
+    post:
+      tags:
+        - Reviews
+      summary: Create a new review
+      description: Create a review for a completed booking (requires authentication)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - salonId
+                - bookingId
+                - rating
+                - comment
+              properties:
+                salonId:
+                  type: string
+                  format: uuid
+                bookingId:
+                  type: string
+                  format: uuid
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                comment:
+                  type: string
+                  example: "Excellent service! Highly recommend."
+      responses:
+        '201':
+          description: Review created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Review'
+                  message:
+                    type: string
+                    example: "Review created successfully"
+        '400':
+          description: Validation error or booking not eligible for review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Offer Endpoints
+  /offers:
+    get:
+      tags:
+        - Offers
+      summary: Get all offers
+      description: Retrieve offers with optional filters
+      parameters:
+        - name: salonId
+          in: query
+          description: Filter offers by salon ID
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: type
+          in: query
+          description: Filter by offer type
+          schema:
+            type: string
+            enum: [PERCENTAGE, FIXED_AMOUNT, FREE_SERVICE, BOGO]
+      responses:
+        '200':
+          description: Offers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Offer'
+                  message:
+                    type: string
+                    example: "Offers retrieved successfully"
+
+  # Upload Endpoints
+  /upload/image:
+    post:
+      tags:
+        - Upload
+      summary: Upload a single image
+      description: Upload a single image file (requires authentication)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file to upload (max 10MB)
+      responses:
+        '200':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      image:
+                        type: string
+                        example: "/uploads/image-123456789.jpg"
+                  message:
+                    type: string
+                    example: "Image uploaded successfully"
+        '400':
+          description: No image provided or invalid file type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: File too large (max 10MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /upload/images:
+    post:
+      tags:
+        - Upload
+      summary: Upload multiple images
+      description: Upload multiple image files (requires authentication, max 10 files)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Image files to upload (max 10 files, 10MB each)
+      responses:
+        '200':
+          description: Images uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      images:
+                        type: array
+                        items:
+                          type: string
+                        example: ["/uploads/image1.jpg", "/uploads/image2.jpg"]
+                      count:
+                        type: integer
+                        example: 2
+                  message:
+                    type: string
+                    example: "Images uploaded successfully"
+        '400':
+          description: No images provided or invalid file types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Payment Methods Configuration
+  /payment-methods/config:
+    get:
+      tags:
+        - Payment Methods
+      summary: Get all payment method configurations
+      description: Retrieve all available payment method configurations (public endpoint)
+      parameters:
+        - name: includeInactive
+          in: query
+          description: Include inactive payment methods
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Payment method configurations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentMethodConfig'
+                  message:
+                    type: string
+                    example: Payment method configurations retrieved successfully
+
+  # Booking Configuration
+  /booking-config/{salonId}:
+    get:
+      tags:
+        - Booking Configuration
+      summary: Get booking configuration for a salon
+      description: Retrieve booking configuration including payment methods and time slots
+      parameters:
+        - name: salonId
+          in: path
+          required: true
+          description: Salon ID (UUID or display ID)
+          schema:
+            oneOf:
+              - type: string
+                format: uuid
+              - type: integer
+      responses:
+        '200':
+          description: Booking configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/BookingConfig'
+                  message:
+                    type: string
+                    example: Booking configuration retrieved successfully
+        '404':
+          description: Salon not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-image {
+            border: 2px solid #ddd;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .test-image img {
+            max-width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border: 1px solid #ccc;
+        }
+        .success {
+            border-color: green;
+            background-color: #f0fff0;
+        }
+        .error {
+            border-color: red;
+            background-color: #fff0f0;
+        }
+        .status {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Loading Test</h1>
+    <p>Testing different image URL formats to see which ones work:</p>
+
+    <div id="test-results"></div>
+
+    <script>
+        const testUrls = [
+            // Direct backend URLs
+            'http://localhost:3002/uploads/salons/test1--13/download%20(1)-1754617443385-774263924.jpeg',
+            'http://localhost:3002/uploads/salons/test1--13/download (1)-1754617443385-774263924.jpeg',
+            
+            // Test if backend is serving static files
+            'http://localhost:3002/uploads/salons/tetsinggg-12/download%20(1)-1754591042204-348373183.jpeg',
+            'http://localhost:3002/uploads/salons/tetsinggg-12/download (1)-1754591042204-348373183.jpeg',
+            
+            // Test placeholder
+            'https://images.pexels.com/photos/3993449/pexels-photo-3993449.jpeg?auto=compress&cs=tinysrgb&w=800'
+        ];
+
+        const testContainer = document.getElementById('test-results');
+
+        testUrls.forEach((url, index) => {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test-image';
+            testDiv.innerHTML = `
+                <h3>Test ${index + 1}</h3>
+                <p><strong>URL:</strong> <code>${url}</code></p>
+                <img src="${url}" alt="Test image ${index + 1}">
+                <div class="status" id="status-${index}">Loading...</div>
+            `;
+            
+            const img = testDiv.querySelector('img');
+            const statusDiv = testDiv.querySelector(`#status-${index}`);
+            
+            img.onload = () => {
+                testDiv.classList.add('success');
+                statusDiv.textContent = '✅ Image loaded successfully';
+                statusDiv.style.color = 'green';
+            };
+            
+            img.onerror = () => {
+                testDiv.classList.add('error');
+                statusDiv.textContent = '❌ Image failed to load';
+                statusDiv.style.color = 'red';
+            };
+            
+            testContainer.appendChild(testDiv);
+        });
+
+        // Test API endpoint
+        fetch('http://localhost:3002/api/v1/salons?page=1&limit=1')
+            .then(response => response.json())
+            .then(data => {
+                console.log('API Response:', data);
+                if (data.success && data.data.length > 0) {
+                    const salon = data.data[0];
+                    console.log('First salon images:', salon.images);
+                    
+                    // Add API test result
+                    const apiDiv = document.createElement('div');
+                    apiDiv.innerHTML = `
+                        <h3>API Test</h3>
+                        <p><strong>Status:</strong> ✅ API accessible</p>
+                        <p><strong>First salon:</strong> ${salon.name}</p>
+                        <p><strong>Images:</strong> ${salon.images ? salon.images.length : 0}</p>
+                        <p><strong>First image URL:</strong> <code>${salon.images?.[0] || 'No images'}</code></p>
+                    `;
+                    testContainer.appendChild(apiDiv);
+                }
+            })
+            .catch(error => {
+                console.error('API Error:', error);
+                const apiDiv = document.createElement('div');
+                apiDiv.innerHTML = `
+                    <h3>API Test</h3>
+                    <p><strong>Status:</strong> ❌ API not accessible</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                `;
+                testContainer.appendChild(apiDiv);
+            });
+    </script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Images</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .test-image {
+            max-width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border: 2px solid #ddd;
+            margin: 10px;
+        }
+        .success {
+            border-color: green;
+        }
+        .error {
+            border-color: red;
+        }
+        .url-display {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 5px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Debug Test</h1>
+    
+    <div class="test-section">
+        <h2>Environment Check</h2>
+        <p><strong>Current URL:</strong> <span id="current-url"></span></p>
+        <p><strong>Expected Frontend:</strong> http://localhost:5173</p>
+        <p><strong>Expected Backend:</strong> http://localhost:3002</p>
+    </div>
+
+    <div class="test-section">
+        <h2>API Test</h2>
+        <div id="api-status">Testing API...</div>
+        <div id="api-data"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Direct Image URL Tests</h2>
+        <div id="image-tests"></div>
+    </div>
+
+    <script>
+        // Display current URL
+        document.getElementById('current-url').textContent = window.location.href;
+
+        // Test API
+        async function testAPI() {
+            const statusDiv = document.getElementById('api-status');
+            const dataDiv = document.getElementById('api-data');
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/v1/salons?page=1&limit=2');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('API returned success: false');
+                }
+                
+                statusDiv.innerHTML = '<span style="color: green;">✅ API accessible</span>';
+                
+                const salons = data.data;
+                dataDiv.innerHTML = `
+                    <h3>Salon Data (${salons.length} salons)</h3>
+                    ${salons.map((salon, index) => `
+                        <div style="border: 1px solid #eee; padding: 10px; margin: 10px 0;">
+                            <h4>${salon.name} (ID: ${salon.displayId})</h4>
+                            <p><strong>Images:</strong> ${salon.images ? salon.images.length : 0}</p>
+                            ${salon.images ? salon.images.map((img, imgIndex) => `
+                                <div style="margin: 5px 0;">
+                                    <p><strong>Image ${imgIndex + 1}:</strong></p>
+                                    <div class="url-display">${img}</div>
+                                    <img src="${img}" alt="Direct ${salon.name} ${imgIndex + 1}" 
+                                         class="test-image" id="direct-${index}-${imgIndex}"
+                                         onload="this.classList.add('success')" 
+                                         onerror="this.classList.add('error')">
+                                </div>
+                            `).join('') : '<p>No images</p>'}
+                        </div>
+                    `).join('')}
+                `;
+                
+                // Test processed URLs
+                testProcessedURLs(salons);
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<span style="color: red;">❌ API error: ${error.message}</span>`;
+                console.error('API Error:', error);
+            }
+        }
+
+        function testProcessedURLs(salons) {
+            const testDiv = document.getElementById('image-tests');
+            
+            // Simulate the frontend URL processing
+            const processImageURL = (url) => {
+                console.log('Processing URL:', url);
+                
+                if (!url) {
+                    return 'https://images.pexels.com/photos/3993449/pexels-photo-3993449.jpeg?auto=compress&cs=tinysrgb&w=800';
+                }
+                
+                // If already absolute URL, encode the path part
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                    try {
+                        const urlObj = new URL(url);
+                        urlObj.pathname = urlObj.pathname.split('/').map(segment => encodeURIComponent(segment)).join('/');
+                        return urlObj.toString();
+                    } catch (error) {
+                        return url;
+                    }
+                }
+                
+                // If relative URL, convert to absolute and encode
+                if (url.startsWith('/uploads/') || url.startsWith('uploads/')) {
+                    const backendBaseUrl = 'http://localhost:3002'; // Hardcoded for test
+                    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+                    
+                    const pathSegments = cleanUrl.split('/').filter(segment => segment.length > 0);
+                    const encodedPath = '/' + pathSegments.map(segment => encodeURIComponent(segment)).join('/');
+                    
+                    return `${backendBaseUrl}${encodedPath}`;
+                }
+                
+                return url;
+            };
+            
+            let testHTML = '<h3>Processed URL Tests</h3>';
+            
+            salons.forEach((salon, salonIndex) => {
+                if (salon.images && salon.images.length > 0) {
+                    salon.images.forEach((originalUrl, imgIndex) => {
+                        const processedUrl = processImageURL(originalUrl);
+                        
+                        testHTML += `
+                            <div style="border: 1px solid #eee; padding: 10px; margin: 10px 0;">
+                                <h4>${salon.name} - Image ${imgIndex + 1}</h4>
+                                <p><strong>Original:</strong></p>
+                                <div class="url-display">${originalUrl}</div>
+                                <p><strong>Processed:</strong></p>
+                                <div class="url-display">${processedUrl}</div>
+                                <img src="${processedUrl}" alt="Processed ${salon.name} ${imgIndex + 1}" 
+                                     class="test-image" id="processed-${salonIndex}-${imgIndex}"
+                                     onload="this.classList.add('success'); console.log('✅ Processed image loaded:', this.src)" 
+                                     onerror="this.classList.add('error'); console.error('❌ Processed image failed:', this.src)">
+                            </div>
+                        `;
+                    });
+                }
+            });
+            
+            testDiv.innerHTML = testHTML;
+        }
+
+        // Run tests
+        testAPI();
+    </script>
+</body>
+</html>

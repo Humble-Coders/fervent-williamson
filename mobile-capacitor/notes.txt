@@ -1,0 +1,70 @@
+cd mobile-capacitor/android
+./gradlew assembleDebug
+# Output: app/build/outputs/apk/debug/app-debug.apk
+
+cd mobile-capacitor/android
+./gradlew assembleRelease
+# Output: app/build/outputs/apk/release/app-release.apk
+
+
+cd mobile-capacitor/android
+./gradlew bundleRelease
+# Output: app/build/outputs/bundle/release/app-release.aab
+
+
+
+cd mobile-capacitor/android/app
+
+keytool -genkey -v -keystore cutq-release-key.keystore \
+  -alias cutq-key-alias-bhagat \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+
+
+cd mobile-capacitor/android
+
+cat > keystore.properties << EOF
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=cutq-key-alias-bhagat
+storeFile=app/cutq-release-key.keystore
+EOF
+
+
+
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    ...
+    
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+    
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+
+cutq-release-key.keystore (the safe)
+  └── Password: storePassword
+      └── cutq-key-alias-bhagat (the key inside)
+          └── Password: keyPassword
+          

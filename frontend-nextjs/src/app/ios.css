@@ -1,0 +1,114 @@
+/* iOS-specific fixes and optimizations */
+
+/* Detect iOS and apply specific fixes */
+@supports (padding: max(0px)) {
+  /* DO NOT add padding to body - iframe wrapper handles safe areas */
+  /* body padding removed to prevent double-padding in iframe */
+
+  /* Header positioning fix for iOS */
+  header {
+    padding-top: max(env(safe-area-inset-top), 0.5rem);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Main content area with proper bottom padding for nav */
+  main {
+    padding-bottom: calc(5rem + max(env(safe-area-inset-bottom), 0.5rem));
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Bottom navigation bar iOS fixes */
+  nav[class*="bottom"] {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Prevent scrolling issues on iOS */
+  html {
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Fix for iOS viewport height issues */
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Smooth scrolling on iOS */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fix for iOS input focus issues */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Fix for iOS button styling */
+  button {
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0;
+  }
+
+  /* Prevent iOS rubber band effect */
+  body {
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+  }
+
+  /* Fix for iOS fixed positioning */
+  .fixed {
+    position: fixed;
+    -webkit-backface-visibility: hidden;
+    -webkit-perspective: 1000;
+  }
+}
+
+/* Specific fixes for notched devices (iPhone X and later) */
+@supports (padding: max(0px)) {
+
+  /* Ensure content doesn't go behind notch */
+  .container-custom {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  /* Fix for bottom nav on notched devices */
+  nav.fixed {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}

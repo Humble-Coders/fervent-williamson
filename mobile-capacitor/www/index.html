@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CutQ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            /* DO NOT add padding here - let iframe handle it */
+        }
+
+        #webview-container {
+            width: 100%;
+            height: 100%;
+            border: none;
+            /* Ensure iframe fills entire viewport */
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #loader {
+            position: fixed;
+            top: env(safe-area-inset-top);
+            left: env(safe-area-inset-left);
+            right: env(safe-area-inset-right);
+            bottom: env(safe-area-inset-bottom);
+            width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
+            height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        /* Offline Screen */
+        #offline-screen {
+            display: none;
+            position: fixed;
+            top: env(safe-area-inset-top);
+            left: env(safe-area-inset-left);
+            right: env(safe-area-inset-right);
+            bottom: env(safe-area-inset-bottom);
+            width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
+            height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            padding: 20px;
+            text-align: center;
+        }
+
+        #offline-screen.show {
+            display: flex;
+        }
+
+        .offline-icon {
+            font-size: 100px;
+            margin-bottom: 30px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .offline-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 15px;
+        }
+
+        .offline-message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 40px;
+            max-width: 320px;
+            line-height: 1.5;
+        }
+
+        .retry-button {
+            background: #fff;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .retry-button:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Pull to Refresh Indicator */
+        #pull-refresh-indicator {
+            position: fixed;
+            top: calc(env(safe-area-inset-top) - 60px);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            background: #3498db;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9998;
+            transition: top 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        #pull-refresh-indicator.show {
+            top: calc(env(safe-area-inset-top) + 20px);
+        }
+
+        #pull-refresh-indicator .refresh-icon {
+            color: white;
+            font-size: 24px;
+            animation: rotate 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes rotate {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Loading Screen -->
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading CutQ...</div>
+    </div>
+
+    <!-- Offline Screen -->
+    <div id="offline-screen">
+        <div class="offline-icon">📡</div>
+        <div class="offline-title">No Internet Connection</div>
+        <div class="offline-message">
+            Oops! It seems you're offline. Please check your internet connection and try again.
+        </div>
+        <button class="retry-button" onclick="retryConnection()">Retry Connection</button>
+    </div>
+
+    <!-- Pull to Refresh Indicator -->
+    <div id="pull-refresh-indicator">
+        <div class="refresh-icon">↻</div>
+    </div>
+
+    <!-- Capacitor Core Script -->
+    <script type="module">
+        import { Capacitor } from 'https://cdn.jsdelivr.net/npm/@capacitor/core@latest/dist/esm/index.js';
+
+        // Configuration
+        const CONFIG = {
+            // Set to 'development' or 'production'
+            MODE: 'development', // Change this to 'production' for production builds
+
+            URLS: {
+                development: {
+                    android: 'http://192.168.1.37:3000',  // Your Mac's local IP
+                    ios: 'http://192.168.1.37:3000',      // Your Mac's local IP
+                    web: 'http://localhost:3000'          // Web fallback
+                },
+                production: {
+                    android: 'https://www.cutq.store',
+                    ios: 'https://www.cutq.store',
+                    web: 'https://www.cutq.store'
+                }
+            }
+        };
+
+        // Get the appropriate URL based on platform and mode
+        function getAppUrl() {
+            const platform = Capacitor.getPlatform(); // 'android', 'ios', or 'web'
+            const mode = CONFIG.MODE;
+
+            console.log('Platform:', platform);
+            console.log('Mode:', mode);
+
+            const url = CONFIG.URLS[mode][platform] || CONFIG.URLS[mode].web;
+            console.log('Loading URL:', url);
+
+            return url;
+        }
+
+        // Set the URL globally for use in the main script
+        window.APP_URL = getAppUrl();
+    </script>
+
+    <!-- WebView Container -->
+    <iframe id="webview-container" src="" frameborder="0" allow="geolocation; microphone; camera; payment"
+        allowfullscreen style="display: none;">
+    </iframe>
+
+    <script>
+        const iframe = document.getElementById('webview-container');
+        const loader = document.getElementById('loader');
+        const offlineScreen = document.getElementById('offline-screen');
+        const pullRefreshIndicator = document.getElementById('pull-refresh-indicator');
+
+        let startY = 0;
+        let isPulling = false;
+        let isRefreshing = false;
+        let isOnline = true;
+
+        // Wait for APP_URL to be set, then load the iframe
+        function initializeApp() {
+            if (window.APP_URL) {
+                iframe.src = window.APP_URL;
+                console.log('Initialized app with URL:', window.APP_URL);
+            } else {
+                // Fallback if Capacitor script fails
+                console.warn('APP_URL not set, using fallback');
+                iframe.src = 'http://10.0.2.2:3000';
+            }
+        }
+
+        // Initialize after a short delay to ensure Capacitor is loaded
+        setTimeout(initializeApp, 100);
+
+        // Simple network detection without Capacitor plugin
+        function checkNetworkStatus() {
+            // Use navigator.onLine as fallback
+            isOnline = navigator.onLine;
+
+            if (isOnline) {
+                showOnline();
+            } else {
+                showOffline();
+            }
+        }
+
+        // Listen for online/offline events
+        window.addEventListener('online', function () {
+            console.log('Network: Online');
+            showOnline();
+        });
+
+        window.addEventListener('offline', function () {
+            console.log('Network: Offline');
+            showOffline();
+        });
+
+        function showOnline() {
+            isOnline = true;
+            offlineScreen.classList.remove('show');
+            iframe.style.display = 'block';
+            // Reload iframe if it was offline
+            if (iframe.src === '' || iframe.src === 'about:blank') {
+                iframe.src = window.APP_URL || 'http://10.0.2.2:3000';
+            }
+        }
+
+        function showOffline() {
+            isOnline = false;
+            loader.style.display = 'none';
+            iframe.style.display = 'none';
+            offlineScreen.classList.add('show');
+        }
+
+        // Retry connection
+        window.retryConnection = function () {
+            if (navigator.onLine) {
+                loader.style.display = 'flex';
+                offlineScreen.classList.remove('show');
+                iframe.src = window.APP_URL || 'http://10.0.2.2:3000';
+            } else {
+                // Still offline, show a message
+                alert('Still no internet connection. Please check your network settings.');
+            }
+        };
+
+        // Pull to Refresh functionality
+        let touchStartY = 0;
+        let touchCurrentY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            if (window.scrollY === 0 && !isRefreshing) {
+                touchStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isPulling && !isRefreshing) {
+                touchCurrentY = e.touches[0].clientY;
+                const pullDistance = touchCurrentY - touchStartY;
+
+                // Get safe area inset top value
+                const safeAreaTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '0');
+
+                if (pullDistance > 0 && pullDistance < 100) {
+                    // Show pull indicator
+                    pullRefreshIndicator.style.top = `calc(env(safe-area-inset-top) + ${pullDistance - 60}px)`;
+                } else if (pullDistance >= 100) {
+                    // Ready to refresh
+                    pullRefreshIndicator.classList.add('show');
+                }
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            if (isPulling && !isRefreshing) {
+                const pullDistance = touchCurrentY - touchStartY;
+
+                if (pullDistance >= 100) {
+                    // Trigger refresh
+                    isRefreshing = true;
+                    refreshPage();
+                } else {
+                    // Reset
+                    pullRefreshIndicator.style.top = 'calc(env(safe-area-inset-top) - 60px)';
+                    pullRefreshIndicator.classList.remove('show');
+                }
+
+                isPulling = false;
+                touchStartY = 0;
+                touchCurrentY = 0;
+            }
+        }, { passive: true });
+
+        function refreshPage() {
+            // Show refresh indicator
+            pullRefreshIndicator.classList.add('show');
+
+            // Reload iframe
+            const currentSrc = iframe.src;
+            iframe.src = '';
+
+            setTimeout(() => {
+                iframe.src = currentSrc;
+
+                // Hide refresh indicator after 1 second
+                setTimeout(() => {
+                    pullRefreshIndicator.classList.remove('show');
+                    pullRefreshIndicator.style.top = 'calc(env(safe-area-inset-top) - 60px)';
+                    isRefreshing = false;
+                }, 1000);
+            }, 100);
+        }
+
+        // Hide loader when iframe loads
+        iframe.onload = function () {
+            setTimeout(function () {
+                loader.style.display = 'none';
+                iframe.style.display = 'block';
+            }, 500);
+        };
+
+        // Handle iframe load errors
+        iframe.onerror = function () {
+            showOffline();
+        };
+
+        // Check network on load
+        checkNetworkStatus();
+
+        // Fallback: hide loader after 5 seconds
+        setTimeout(function () {
+            if (loader.style.display !== 'none') {
+                loader.style.display = 'none';
+                iframe.style.display = 'block';
+            }
+        }, 5000);
+    </script>
+</body>
+
+</html>

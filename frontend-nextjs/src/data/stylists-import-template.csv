@@ -1,0 +1,4 @@
+﻿name,email,phone,specialties,experience,isActive,serviceNames,imageUrls
+John Doe,john.doe@example.com,+91 9876543210,"Hair Cutting, Hair Styling, Hair Coloring",5,true,"Hair Cut & Style, Hair Color","https://example.com/stylist1.jpg;https://example.com/stylist1-2.jpg"
+Jane Smith,jane.smith@example.com,+91 9876543211,"Facial Treatment, Skincare, Massage",3,true,,https://example.com/stylist2.jpg
+Mike Johnson,mike.johnson@example.com,+91 9876543212,"Nail Art, Manicure, Pedicure",2,true,"Manicure, Pedicure, Nail Art",

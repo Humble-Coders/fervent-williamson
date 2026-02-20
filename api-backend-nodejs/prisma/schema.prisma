@@ -1,0 +1,624 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String          @id @default(uuid())
+  name                  String
+  email                 String          @unique
+  password              String?
+  phone                 String?
+  avatar                String?
+  role                  UserRole        @default(CUSTOMER)
+  isActive              Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  preferences           Json?
+  emailVerified         Boolean         @default(false)
+  displayId             Int             @unique @default(autoincrement())
+  gender                Gender?
+  bookings              Booking[]
+  favorites             Favorite[]
+  loyaltyAccount        LoyaltyAccount?
+  paymentMethods        PaymentMethod[]
+  refreshTokens         RefreshToken[]
+  reviews               Review[]
+  reviewedSalonRequests SalonRequest[]
+  ownedSalons           Salon[]
+  socialAccounts        SocialAccount[]
+  usedOffers            Offer[]         @relation("UserOffers")
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id         String   @id @default(uuid())
+  userId     String
+  provider   String
+  providerId String
+  email      String?
+  name       String?
+  avatar     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@map("social_accounts")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Salon {
+  id                    String            @id @default(uuid())
+  name                  String
+  description           String
+  address               String
+  latitude              Float?
+  longitude             Float?
+  phone                 String
+  email                 String
+  rating                Float             @default(0)
+  reviewCount           Int               @default(0)
+  images                String[]
+  featured              Boolean           @default(false)
+  isOpen                Boolean           @default(true)
+  distance              String?
+  specialties           String[]
+  amenities             String[]
+  teamSize              Int               @default(1)
+  yearsInBusiness       Int               @default(0)
+  certifications        String[]
+  workingHours          Json
+  mapsLink              String?
+  slotDuration          Int?              @default(30)
+  breakDuration         Int?              @default(0)
+  advanceBookingDays    Int?              @default(30)
+  minimumNoticeHours    Float?            @default(2)
+  ownerId               String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  displayId             Int               @unique @default(autoincrement())
+  allowSameDayBooking   Boolean           @default(true)
+  bufferTime            Int?              @default(15)
+  enabledPaymentMethods String[]          @default(["card", "wallet", "cash"])
+  maxBookingsPerDay     Int?              @default(20)
+  maxRescheduleLimit    Int?              @default(3)
+  emailNotifications    Boolean           @default(true)
+  smsNotifications      Boolean           @default(false)
+  reminderHours         Int?              @default(24)
+  bookings              Booking[]
+  favorites             Favorite[]
+  offers                Offer[]
+  reviews               Review[]
+  owner                 User?             @relation(fields: [ownerId], references: [id])
+  serviceCategories     ServiceCategory[]
+  services              Service[]
+  stylists              Stylist[]
+
+  @@map("salons")
+}
+
+model ServiceCategory {
+  id                  String    @id @default(uuid())
+  name                String
+  icon                String
+  color               String?
+  emoji               String
+  description         String?
+  isGlobal            Boolean   @default(true)
+  isDashboardVisible  Boolean   @default(true)
+  dashboardSortOrder  Int?      @default(0)
+  createdAt           DateTime  @default(now())
+  salonDisplayId      Int?
+  displayId           Int       @unique @default(autoincrement())
+  salon               Salon?    @relation(fields: [salonDisplayId], references: [displayId], onDelete: Cascade)
+  services            Service[]
+
+  @@unique([name, salonDisplayId])
+  @@map("service_categories")
+}
+
+model Service {
+  id           String          @id @default(uuid())
+  name         String
+  description  String
+  duration     Int
+  price        Decimal
+  priceCanVary Boolean         @default(false)
+  timeCanVary  Boolean         @default(false)
+  popular      Boolean         @default(false)
+  emoji        String
+  salonId      String
+  categoryId   String
+  gender       Gender?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  displayId    Int             @unique @default(autoincrement())
+  images       String[]        @default([])
+  bookings     Booking[]
+  bookingItems BookingItem[]
+  category     ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  salon        Salon           @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  subServices  SubService[]
+
+  @@map("services")
+}
+
+model SubService {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  duration     Int
+  price        Decimal
+  priceCanVary Boolean       @default(false)
+  timeCanVary  Boolean       @default(false)
+  images       String[]      @default([])
+  isActive     Boolean       @default(true)
+  serviceId    String
+  displayId    Int           @unique @default(autoincrement())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  bookings     Booking[]
+  bookingItems BookingItem[]
+  service      Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("sub_services")
+}
+
+model Stylist {
+  id           String        @id @default(uuid())
+  name         String
+  avatar       String?
+  rating       Float         @default(0)
+  specialties  String[]
+  emoji        String?
+  salonId      String
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  email        String
+  phone        String
+  services     Json
+  experience   Int           @default(0)
+  displayId    Int           @unique @default(autoincrement())
+  images       String[]      @default([])
+  bookings     Booking[]
+  bookingItems BookingItem[]
+  reviews      Review[]
+  salon        Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
+
+  @@map("stylists")
+}
+
+model Booking {
+  id                  String        @id @default(uuid())
+  userId              String
+  salonId             String
+  serviceId           String        // Kept for backward compatibility - primary service
+  stylistId           String?       // Kept for backward compatibility - primary stylist
+  date                String
+  time                String
+  duration            Int           // Total duration of all services
+  status              BookingStatus @default(PENDING)
+  totalPrice          Decimal       // Total price of all services
+  notes               String?
+  promoCode           String?
+  discount            Decimal       @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  verificationCode    String?
+  userCode            String?
+  displayId           Int           @unique @default(autoincrement())
+  salonDisplayId      Int?
+  serviceDisplayId    Int?
+  stylistDisplayId    Int?
+  userDisplayId       Int?
+  rescheduleCount     Int           @default(0)
+  subServiceDisplayId Int?
+  subServiceId        String?
+  salon               Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  service             Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  stylist             Stylist?      @relation(fields: [stylistId], references: [id])
+  subService          SubService?   @relation(fields: [subServiceId], references: [id])
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment             Payment?
+  review              Review?
+  bookingItems        BookingItem[] // Multiple services in this booking
+
+  @@map("bookings")
+}
+
+model BookingItem {
+  id                  String      @id @default(uuid())
+  bookingId           String
+  serviceId           String
+  subServiceId        String?
+  stylistId           String?
+  duration            Int         // Duration of this specific service
+  price               Decimal     // Price of this specific service
+  serviceDisplayId    Int?
+  subServiceDisplayId Int?
+  stylistDisplayId    Int?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  booking             Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service             Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  subService          SubService? @relation(fields: [subServiceId], references: [id])
+  stylist             Stylist?    @relation(fields: [stylistId], references: [id])
+
+  @@map("booking_items")
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  bookingId         String        @unique
+  amount            Decimal
+  method            String
+  status            PaymentStatus @default(PENDING)
+  transactionId     String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Razorpay specific fields
+  razorpayOrderId   String?       @unique // Razorpay order ID
+  razorpayPaymentId String?       @unique // Razorpay payment ID
+  razorpaySignature String?       // Razorpay signature for verification
+  currency          String        @default("INR")
+  failureReason     String?       // Reason for payment failure
+
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model PaymentMethod {
+  id         String            @id @default(uuid())
+  userId     String
+  type       PaymentMethodType
+  name       String
+  last4      String?
+  expiryDate String?
+  isDefault  Boolean           @default(false)
+  brand      String
+  icon       String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payment_methods")
+}
+
+model PaymentMethodConfig {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  type        String
+  icon        String
+  emoji       String
+  description String
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("payment_method_configs")
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  options   String?  // JSON array of available options for select fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  salonId   String
+  stylistId String?
+  bookingId String?  @unique
+  rating    Int
+  comment   String
+  service   String?
+  helpful   Int      @default(0)
+  verified  Boolean  @default(true)
+  emoji     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  stylist   Stylist? @relation(fields: [stylistId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model LoyaltyAccount {
+  id           String               @id @default(uuid())
+  userId       String               @unique
+  points       Int                  @default(0)
+  totalSpent   Decimal              @default(0)
+  level        String               @default("Bronze")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions LoyaltyTransaction[]
+
+  @@map("loyalty_accounts")
+}
+
+model LoyaltyTransaction {
+  id          String         @id @default(uuid())
+  accountId   String
+  points      Int
+  type        String
+  description String
+  bookingId   String?
+  createdAt   DateTime       @default(now())
+  account     LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("loyalty_transactions")
+}
+
+model Offer {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  type        OfferType
+  salonId     String?
+  validFrom   DateTime
+  validUntil  DateTime
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  code        String?
+  isFeatured  Boolean   @default(false)
+  maxDiscount Float?
+  minPurchase Float?
+  usageLimit  Int?
+  value       Float
+  salon       Salon?    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  usedBy      User[]    @relation("UserOffers")
+
+  @@map("offers")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  salonId   String
+  createdAt DateTime @default(now())
+  salon     Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, salonId])
+  @@map("favorites")
+}
+
+model SalonRequest {
+  id          String             @id @default(uuid())
+  salonName   String
+  ownerName   String
+  email       String
+  phone       String
+  address     String?
+  description String?
+  status      SalonRequestStatus @default(PENDING)
+  adminNotes  String?
+  reviewedAt  DateTime?
+  reviewedBy  String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  reviewer    User?              @relation(fields: [reviewedBy], references: [id])
+
+  @@map("salon_requests")
+}
+
+model AnalyticsEvent {
+  id               String             @id @default(uuid())
+  userId           String?
+  sessionId        String
+  eventType        AnalyticsEventType
+  page             String
+  action           String?
+  salonId          String?
+  salonDisplayId   Int?
+  serviceId        String?
+  serviceDisplayId Int?
+  stylistId        String?
+  stylistDisplayId Int?
+  bookingId        String?
+  bookingDisplayId Int?
+  userRole         UserRole?
+  deviceType       DeviceType?
+  userAgent        String?
+  ipAddress        String?
+  referrer         String?
+  metadata         Json?
+  duration         Int?
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("analytics_events")
+}
+
+model CommunicationAnalytics {
+  id                  String            @id @default(uuid())
+  userId              String?
+  sessionId           String?
+  communicationType   CommunicationType
+  communicationStatus String
+  recipientPhone      String?
+  recipientEmail      String?
+  messageTemplate     String?
+  salonId             String?
+  salonDisplayId      Int?
+  bookingId           String?
+  bookingDisplayId    Int?
+  metadata            Json?
+  sentAt              DateTime          @default(now())
+  deliveredAt         DateTime?
+  openedAt            DateTime?
+  clickedAt           DateTime?
+  failedAt            DateTime?
+  errorMessage        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @default(now())
+
+  @@index([userId])
+  @@index([communicationType])
+  @@map("communication_analytics")
+}
+
+model AnalyticsConfig {
+  id          String   @id @default(uuid())
+  configKey   String   @unique
+  configValue Json
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@map("analytics_config")
+}
+
+model EarlyUser {
+  id        String   @id @default(uuid())
+  email     String?
+  phone     String?
+  type      String   // 'email' or 'phone'
+  position  Int      @unique @default(autoincrement())
+  isNotified Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email])
+  @@unique([phone])
+  @@map("early_users")
+}
+
+enum UserRole {
+  ADMIN
+  SALON_OWNER
+  CUSTOMER
+  MANAGER
+  STAFF
+}
+
+enum BookingStatus {
+  PENDING
+  PAYMENT_PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethodType {
+  CARD
+  WALLET
+  BANK
+}
+
+enum OfferType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SERVICE
+  BOGO
+}
+
+enum SalonRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AnalyticsEventType {
+  PAGE_VIEW
+  ACTION
+  CONVERSION
+  ERROR
+  COMMUNICATION
+  NOTIFICATION
+  BUSINESS_EVENT
+}
+
+enum DeviceType {
+  MOBILE
+  DESKTOP
+  TABLET
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  UNISEX
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum CommunicationType {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+  IN_APP
+}
+
+enum CommunicationStatus {
+  SENT
+  DELIVERED
+  FAILED
+  OPENED
+  CLICKED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+enum BusinessEventType {
+  BOOKING_CREATED
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+  PAYMENT_INITIATED
+  PAYMENT_COMPLETED
+  PAYMENT_FAILED
+  SALON_REGISTERED
+  SALON_VERIFIED
+  SERVICE_CREATED
+  USER_REGISTERED
+  USER_VERIFIED
+}
