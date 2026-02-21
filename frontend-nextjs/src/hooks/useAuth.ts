@@ -19,18 +19,13 @@ export const useAuth = () => {
     updateUser,
   } = useAuthStore();
 
-
   const login = async (credentials: LoginCredentials) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const response = await authService.login(credentials);
-      const { user, token } = response;
-      
-      localStorage.setItem('auth_token', token);
-      setUser(user);
-      
+      const loggedInUser = await authService.login(credentials);
+      setUser(loggedInUser);
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
@@ -44,14 +39,10 @@ export const useAuth = () => {
   const register = async (userData: RegisterData) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const response = await authService.register(userData);
-      const { user, token } = response;
-      
-      localStorage.setItem('auth_token', token);
-      setUser(user);
-      
+      const newUser = await authService.register(userData);
+      setUser(newUser);
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Registration failed';
@@ -62,26 +53,20 @@ export const useAuth = () => {
     }
   };
 
-  const logout = () => {
-    // Clear all localStorage data
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_data');
-    localStorage.removeItem('booking-draft');
-    localStorage.removeItem('refresh_token');
-
-    // Clear any other salon-related cached data
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('salon-') || key.startsWith('booking-') || key.includes('auth'))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-
-    // Reset all stores
+  const logout = async () => {
     try {
-      // Import and reset salon store
+      await authService.logout();
+    } catch (error) {
+      logger.warn('Logout error:', error);
+    }
+
+    // Clear localStorage booking drafts etc.
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('booking-draft');
+    }
+
+    // Reset other stores
+    try {
       import('../store/salonStore').then(({ useSalonStore }) => {
         const store = useSalonStore.getState();
         store.setCurrentSalon(null);
@@ -91,7 +76,6 @@ export const useAuth = () => {
         store.setLoading(false);
       });
 
-      // Import and reset booking store
       import('../store/bookingStore').then(({ useBookingStore }) => {
         useBookingStore.getState().reset();
       });
@@ -99,22 +83,19 @@ export const useAuth = () => {
       logger.warn('Error resetting stores during logout:', error);
     }
 
-    // Call auth service logout and reset auth store
-    authService.logout();
     logoutStore();
   };
 
   const updateProfile = async (updates: Partial<User>) => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('No authentication token found');
+    if (!user) {
+      throw new Error('No authenticated user');
     }
 
     setLoading(true);
     setError(null);
-    
+
     try {
-      const updatedUser = await authService.updateProfile(updates);
+      const updatedUser = await authService.updateProfile(user.id, updates);
       updateUser(updatedUser);
       return { success: true };
     } catch (error) {
@@ -137,29 +118,12 @@ export const useAuth = () => {
     return user ? roles.includes(user.role as UserRole) : false;
   };
 
-  const isAdmin = (): boolean => {
-    return hasRole([UserRole.ADMIN]);
-  };
-
-  const isSalonOwner = (): boolean => {
-    return hasRole([UserRole.SALON_OWNER]);
-  };
-
-  const isCustomer = (): boolean => {
-    return hasRole([UserRole.CUSTOMER]);
-  };
-
-  const canAccessAdminPanel = (): boolean => {
-    return hasRole([UserRole.ADMIN]);
-  };
-
-  const canAccessSalonPanel = (): boolean => {
-    return hasRole([UserRole.ADMIN, UserRole.SALON_OWNER]);
-  };
-
-  const canAccessCustomerPanel = (): boolean => {
-    return hasRole([UserRole.ADMIN, UserRole.CUSTOMER]);
-  };
+  const isAdmin = (): boolean => hasRole([UserRole.ADMIN]);
+  const isSalonOwner = (): boolean => hasRole([UserRole.SALON_OWNER]);
+  const isCustomer = (): boolean => hasRole([UserRole.CUSTOMER]);
+  const canAccessAdminPanel = (): boolean => hasRole([UserRole.ADMIN]);
+  const canAccessSalonPanel = (): boolean => hasRole([UserRole.ADMIN, UserRole.SALON_OWNER]);
+  const canAccessCustomerPanel = (): boolean => hasRole([UserRole.ADMIN, UserRole.CUSTOMER]);
 
   return {
     user,
@@ -171,8 +135,6 @@ export const useAuth = () => {
     logout,
     updateProfile,
     clearError,
-
-    // Role helpers
     hasRole,
     isAdmin,
     isSalonOwner,

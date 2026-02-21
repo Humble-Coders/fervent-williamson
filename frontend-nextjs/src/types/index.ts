@@ -149,30 +149,10 @@ export interface RegisterData {
 
 export interface AuthResponse {
   user: User;
-  token: string;
-  refreshToken: string;
-  expiresIn: number;
-}
-
-export interface OTPRequest {
-  identifier: string; // email or phone
-  type: 'email' | 'sms';
-}
-
-export interface OTPVerification {
-  identifier: string;
-  otp: string;
-  type: 'email' | 'sms';
 }
 
 export interface PasswordResetRequest {
   email: string;
-}
-
-export interface PasswordReset {
-  token: string;
-  password: string;
-  confirmPassword: string;
 }
 
 // ============================================================================
