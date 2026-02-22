@@ -2,14 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { logger } from '@/config/logger';
 import { useRouter } from 'next/navigation';
-import { Plus, Edit, Trash2, Search, Mail, Phone, User, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Mail, Phone, User } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
-import BulkImportModal from '../../components/ui/BulkImportModal';
 import { stylistService, Stylist } from '../../services/stylistService';
 import { useAuthStore } from '../../store/authStore';
 import { toast } from 'react-hot-toast';
@@ -37,7 +36,6 @@ const StylistPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
 
   useEffect(() => {
     loadStylists();
@@ -137,13 +135,6 @@ const StylistPage: React.FC = () => {
           <p className="text-gray-600">Manage your salon team members</p>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowBulkImportModal(true)}
-            icon={<Upload />}
-          >
-            Bulk Import
-          </Button>
           <Button onClick={handleAddStylist} icon={<Plus />}>
             Add Stylist
           </Button>
@@ -261,16 +252,6 @@ const StylistPage: React.FC = () => {
         </div>
       )}
 
-      {/* Bulk Import Modal */}
-      <BulkImportModal
-        isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
-        importType="stylists"
-        onImportComplete={() => {
-          loadStylists(); // Reload stylists after import
-          setShowBulkImportModal(false);
-        }}
-      />
     </div>
   );
 };

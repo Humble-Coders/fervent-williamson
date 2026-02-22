@@ -3,7 +3,7 @@ import { X, Building2, Mail, Phone, MapPin, User, Send } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Alert from '../ui/Alert';
-import { buildApiUrl } from '../../config/env';
+import { adminSalonService } from '../../services/adminSalonService';
 
 interface SalonRequestModalProps {
   isOpen: boolean;
@@ -49,35 +49,31 @@ const SalonRequestModal: React.FC<SalonRequestModalProps> = ({ isOpen, onClose }
     setMessage(null);
 
     try {
-      const response = await fetch(buildApiUrl('salon-requests'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      await adminSalonService.createSalon({
+        name: formData.salonName,
+        ownerName: formData.ownerName,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        description: formData.description,
+        isOpen: false, // New requests start as pending (not open)
+      } as any);
 
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Your CutQ request has been submitted successfully! We will contact you soon.' });
-        // Reset form after successful submission
-        setTimeout(() => {
-          setFormData({
-            salonName: '',
-            ownerName: '',
-            email: '',
-            phone: '',
-            address: '',
-            description: '',
-          });
-          onClose();
-        }, 2000);
-      } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to submit salon request' });
-      }
+      setMessage({ type: 'success', text: 'Your CutQ request has been submitted successfully! We will contact you soon.' });
+      // Reset form after successful submission
+      setTimeout(() => {
+        setFormData({
+          salonName: '',
+          ownerName: '',
+          email: '',
+          phone: '',
+          address: '',
+          description: '',
+        });
+        onClose();
+      }, 2000);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      setMessage({ type: 'error', text: 'Failed to submit salon request. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }

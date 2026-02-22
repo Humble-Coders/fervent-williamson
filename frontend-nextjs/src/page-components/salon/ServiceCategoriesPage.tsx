@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { logger } from '@/config/logger';
-import { Plus, Edit, Trash2, Search, Package, Tag, Sparkles, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Package, Tag, Sparkles } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
@@ -9,7 +9,6 @@ import Badge from '../../components/ui/Badge';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
-import BulkImportModal from '../../components/ui/BulkImportModal';
 import { salonCategoryService, SalonServiceCategory, CreateSalonCategoryData } from '../../services/salonCategoryService';
 // import { useAuthStore } from '../../store/authStore'; // Removed unused import
 import { toast } from 'react-hot-toast';
@@ -22,7 +21,6 @@ const ServiceCategoriesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<SalonServiceCategory | null>(null);
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -94,11 +92,6 @@ const ServiceCategoriesPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleBulkImportComplete = () => {
-    setShowBulkImportModal(false);
-    loadCategories(); // Reload categories after bulk import
-  };
-
   const filteredSalonCategories = (salonCategories || []).filter(category =>
     category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -119,13 +112,6 @@ const ServiceCategoriesPage: React.FC = () => {
           <p className="text-gray-600">Manage your service categories and organization</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowBulkImportModal(true)}
-            icon={<Upload />}
-          >
-            Bulk Import
-          </Button>
           <Button
             onClick={() => {
               setEditingCategory(null);
@@ -260,13 +246,6 @@ const ServiceCategoriesPage: React.FC = () => {
         }
       />
 
-      {/* Bulk Import Modal */}
-      <BulkImportModal
-        isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
-        importType="service-categories"
-        onImportComplete={handleBulkImportComplete}
-      />
     </div>
   );
 };

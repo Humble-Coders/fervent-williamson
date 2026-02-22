@@ -17,7 +17,6 @@ import {
 // // import MetaTags from '../components/seo/MetaTags';
 // import { getHomeSEO } from '../utils/seoUtils';
 // // import { usePageTitle } from '../hooks/usePageTitle';
-import { apiClient } from '../services/api';
 import { useHomeStore } from '../store/homeStore';
 import { useAuthStore } from '../store/authStore';
 import HeroSection from '../components/home/HeroSection';

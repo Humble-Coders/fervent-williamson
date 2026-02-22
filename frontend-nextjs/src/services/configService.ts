@@ -49,14 +49,14 @@ class ConfigService {
     }
   }
 
-  // Update a configuration
-  async updateConfig(key: string, value: string): Promise<SystemConfig> {
+  // Update a configuration (accepts string value or partial update object)
+  async updateConfig(key: string, data: string | Record<string, any>): Promise<SystemConfig> {
     try {
       const ref = doc(db, 'config', key);
-      await updateDoc(ref, {
-        value,
-        updatedAt: serverTimestamp(),
-      });
+      const updateData = typeof data === 'string'
+        ? { value: data, updatedAt: serverTimestamp() }
+        : { ...data, updatedAt: serverTimestamp() };
+      await updateDoc(ref, updateData);
       return this.getConfig(key);
     } catch (error) {
       logger.error(`Error updating configuration ${key}:`, error);
@@ -65,11 +65,11 @@ class ConfigService {
   }
 
   // Add a new option to a select field
-  async addOption(key: string, value: string, label: string): Promise<{ key: string; options: Array<{ value: string; label: string }> }> {
+  async addOption(key: string, option: { value: string; label: string }): Promise<{ key: string; options: Array<{ value: string; label: string }> }> {
     try {
       const config = await this.getConfig(key);
       const options = config.options || [];
-      options.push({ value, label });
+      options.push(option);
 
       await updateDoc(doc(db, 'config', key), {
         options,

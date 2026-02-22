@@ -1,7 +1,6 @@
 // Core types for the salon booking platform
 
 // Re-export specialized type modules
-export * from './api';
 export * from './forms';
 
 // ============================================================================
@@ -21,19 +20,6 @@ export enum BookingStatus {
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
   COMPLETED = 'COMPLETED'
-}
-
-export enum PaymentStatus {
-  PENDING = 'PENDING',
-  PAID = 'PAID',
-  REFUNDED = 'REFUNDED',
-  FAILED = 'FAILED'
-}
-
-export enum PaymentMethodType {
-  CARD = 'CARD',
-  WALLET = 'WALLET',
-  BANK = 'BANK'
 }
 
 export enum OfferType {
@@ -101,9 +87,6 @@ export interface UserWithRelations extends User {
   reviews?: Review[];
   favorites?: Favorite[];
   ownedSalons?: Salon[];
-  loyaltyAccount?: LoyaltyAccount;
-  paymentMethods?: PaymentMethod[];
-  socialAccounts?: SocialAccount[];
 }
 
 export interface UserPreferences {
@@ -118,16 +101,6 @@ export interface UserPreferences {
   language: string;
   currency: string;
   timezone: string;
-}
-
-export interface SocialAccount {
-  id: string;
-  provider: 'google' | 'facebook' | 'twitter' | 'github' | 'apple';
-  providerId: string;
-  email?: string;
-  name?: string;
-  avatar?: string;
-  createdAt: string;
 }
 
 // ============================================================================
@@ -212,10 +185,7 @@ export interface SalonBookingConfig {
   bufferTime: number; // in minutes
   maxBookingsPerDay: number;
   allowSameDayBooking: boolean;
-  enabledPaymentMethods: string[];
   autoConfirmBookings: boolean;
-  requireDeposit: boolean;
-  depositAmount?: number;
   cancellationPolicy: string;
   reschedulePolicy: string;
 }
@@ -426,7 +396,6 @@ export interface BookingWithRelations extends Booking {
   salon?: Salon;
   service?: Service;
   stylist?: Stylist;
-  payment?: Payment;
   review?: Review;
 }
 
@@ -444,45 +413,6 @@ export interface BookingAvailability {
   date: string;
   availableSlots: TimeSlot[];
   unavailableSlots: TimeSlot[];
-}
-
-// ============================================================================
-// PAYMENT TYPES
-// ============================================================================
-
-export interface Payment {
-  id: string;
-  bookingId: string;
-  amount: number;
-  currency: string;
-  status: PaymentStatus;
-  method: PaymentMethodType;
-  transactionId?: string;
-  gatewayResponse?: any;
-  refundAmount?: number;
-  refundReason?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaymentMethod {
-  id: string;
-  userId: string;
-  type: PaymentMethodType;
-  name: string;
-  details: any; // Card details, wallet info, etc.
-  isDefault: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaymentRequest {
-  bookingId: string;
-  amount: number;
-  method: PaymentMethodType;
-  paymentMethodId?: string;
-  savePaymentMethod?: boolean;
 }
 
 // ============================================================================
@@ -568,44 +498,6 @@ export interface OfferWithRelations extends Offer {
 }
 
 // ============================================================================
-// LOYALTY TYPES
-// ============================================================================
-
-export interface LoyaltyAccount {
-  id: string;
-  userId: string;
-  points: number;
-  tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
-  totalEarned: number;
-  totalRedeemed: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LoyaltyTransaction {
-  id: string;
-  loyaltyAccountId: string;
-  type: 'EARNED' | 'REDEEMED' | 'EXPIRED';
-  points: number;
-  description: string;
-  bookingId?: string;
-  expiresAt?: string;
-  createdAt: string;
-}
-
-export interface LoyaltyReward {
-  id: string;
-  title: string;
-  description: string;
-  pointsCost: number;
-  type: 'DISCOUNT' | 'FREE_SERVICE' | 'GIFT';
-  value: number;
-  isActive: boolean;
-  image?: string;
-  terms?: string;
-}
-
-// ============================================================================
 // FAVORITE TYPES
 // ============================================================================
 
@@ -640,10 +532,7 @@ export interface AppConfig {
   defaultBookingDuration: number;
   maxAdvanceBookingDays: number;
   minNoticeHours: number;
-  supportedPaymentMethods: PaymentMethodType[];
-  loyaltyEnabled: boolean;
   reviewsEnabled: boolean;
-  socialLoginEnabled: boolean;
   maintenanceMode: boolean;
   appVersion: string;
 }

@@ -8,7 +8,8 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import GenderFilter from '../components/salon/GenderFilter';
 
-import { buildApiUrl } from '../config/env';
+import { categoryService } from '../services/categoryService';
+import { serviceService } from '../services/serviceService';
 import { getAbsoluteImageUrl } from '../utils/imageUtils';
 
 // import SEOHead from '../components/seo/SEOHead';
@@ -67,25 +68,52 @@ const ServiceCategoryPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch category info and services
-      const [categoryResponse, servicesResponse] = await Promise.all([
-        fetch(buildApiUrl(`categories/by-slug/${category}`)),
-        fetch(buildApiUrl(`services/category/${category}`))
-      ]);
+      // Fetch all categories and find the one matching the URL slug
+      const allCategories = await categoryService.getAllCategories();
+      const matchedCategory = allCategories.find(
+        (cat) => cat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') === category ||
+                 cat.id === category
+      );
 
-      if (!categoryResponse.ok || !servicesResponse.ok) {
-        throw new Error('Failed to fetch data');
-      }
+      if (matchedCategory) {
+        setCategoryInfo({
+          id: matchedCategory.id,
+          name: matchedCategory.name,
+          description: matchedCategory.description || '',
+          emoji: matchedCategory.emoji,
+          icon: matchedCategory.icon,
+        });
 
-      const categoryData = await categoryResponse.json();
-      const servicesData = await servicesResponse.json();
+        // Fetch services by category ID
+        const categoryServices = await serviceService.getServicesByCategory(matchedCategory.id);
 
-      if (categoryData.success) {
-        setCategoryInfo(categoryData.data);
-      }
+        // Map service data to the expected format, enriching with salon info
+        const mappedServices: Service[] = categoryServices.map((svc: any) => ({
+          id: svc.id,
+          displayId: svc.displayId,
+          name: svc.name,
+          description: svc.description || '',
+          duration: svc.duration,
+          price: svc.price,
+          popular: svc.popular || false,
+          emoji: svc.emoji || '',
+          categoryId: svc.categoryId,
+          gender: svc.gender,
+          images: svc.images,
+          salon: svc.salon || {
+            id: svc.salonId || '',
+            displayId: undefined,
+            name: '',
+            address: '',
+            rating: 0,
+            reviewCount: 0,
+          },
+        }));
 
-      if (servicesData.success) {
-        setServices(servicesData.data);
+        setServices(mappedServices);
+      } else {
+        setCategoryInfo(null);
+        setServices([]);
       }
     } catch (err) {
       setError('Failed to load services. Please try again.');

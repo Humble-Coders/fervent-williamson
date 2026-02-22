@@ -3,7 +3,7 @@ import { logger } from '@/config/logger';
 import { Star, Users, TrendingUp, Package, LucideIcon } from 'lucide-react';
 import Card from '../ui/Card';
 // import EmptyState from '../ui/EmptyState'; // Removed unused import
-import { buildApiUrl } from '../../config/env';
+import { adminService } from '../../services/adminService';
 
 interface ServiceCategory {
   id: string;
@@ -33,26 +33,14 @@ const ServiceCategories: React.FC<ServiceCategoriesProps> = ({
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-
-        const response = await fetch(buildApiUrl('admin/stats'), {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data.stats) {
-            setStats({
-              totalSalons: data.data.stats.totalSalons || 0,
-              totalUsers: data.data.stats.totalUsers || 0,
-              totalBookings: data.data.stats.totalBookings || 0,
-              totalStylists: Math.floor((data.data.stats.totalUsers || 0) * 0.3), // Estimate stylists as 30% of users
-            });
-          }
+        const data = await adminService.getStats();
+        if (data.overview) {
+          setStats({
+            totalSalons: data.overview.totalSalons || 0,
+            totalUsers: data.overview.totalUsers || 0,
+            totalBookings: data.overview.totalBookings || 0,
+            totalStylists: Math.floor((data.overview.totalUsers || 0) * 0.3), // Estimate stylists as 30% of users
+          });
         }
       } catch (error) {
         logger.error('Error fetching stats:', error);

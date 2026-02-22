@@ -15,7 +15,6 @@ import {
   Check
 } from 'lucide-react';
 import { bookingService } from '../../services/bookingService';
-import { buildApiUrl } from '../../config/env';
 // import { useAuthStore } from '../../store/authStore'; // Removed unused import
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Button from '../../components/ui/Button';
@@ -75,26 +74,9 @@ const BookingsPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(buildApiUrl('bookings/salon/current'), {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to load bookings');
-      }
-
-      const data = await response.json();
-      logger.info('📋 Loaded salon bookings:', data);
-
-      if (data.success) {
-        setBookings(data.data || []);
-      } else {
-        throw new Error(data.message || 'Failed to load bookings');
-      }
+      const result = await bookingService.getSalonBookings();
+      logger.info('Loaded salon bookings:', result);
+      setBookings(result.data || []);
     } catch (err: unknown) {
       logger.error('Error loading bookings:', err);
       setError((err as Error).message);

@@ -2,13 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { logger } from '@/config/logger';
 import { useRouter } from 'next/navigation';
-import { Plus, Edit, Trash2, Search, Filter, Upload, Grid, List, Eye, Package, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Filter, Grid, List, Eye, Package, X } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
-import BulkImportModal from '../../components/ui/BulkImportModal';
-
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
 import { serviceService, Service, SubService } from '../../services/serviceService';
@@ -26,7 +24,6 @@ const ServicesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [editingSubService, setEditingSubService] = useState<SubService | null>(null);
@@ -200,13 +197,6 @@ const ServicesPage: React.FC = () => {
             </Button>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={() => setShowBulkImportModal(true)}
-            icon={<Upload />}
-          >
-            Bulk Import
-          </Button>
           <Button onClick={handleAddService} icon={<Plus />}>
             Add Service
           </Button>
@@ -415,17 +405,6 @@ const ServicesPage: React.FC = () => {
           </div>
         </Card>
       )}
-
-      {/* Bulk Import Modal */}
-      <BulkImportModal
-        isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
-        importType="services"
-        onImportComplete={() => {
-          loadData(); // Reload services after import
-          setShowBulkImportModal(false);
-        }}
-      />
 
       {/* Service Detail Modal */}
       {selectedService && (

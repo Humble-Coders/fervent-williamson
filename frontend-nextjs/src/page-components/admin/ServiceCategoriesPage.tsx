@@ -9,16 +9,13 @@ import {
   Package,
   AlertCircle,
   X,
-  Globe,
-  Upload
+  Globe
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
-import BulkImportModal from '../../components/ui/BulkImportModal';
 import { categoryService, ServiceCategory, ServiceCategoryWithSalon } from '../../services/categoryService';
-import { api } from '../../services/api';
 
 type CreateCategoryData = Omit<ServiceCategory, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -34,7 +31,6 @@ const ServiceCategoriesPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [visibleCategoryIds, setVisibleCategoryIds] = useState<string[]>([]);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
 
@@ -185,11 +181,6 @@ const ServiceCategoriesPage: React.FC = () => {
     });
   };
 
-  const handleBulkImportComplete = () => {
-    setShowBulkImportModal(false);
-    loadCategories(); // Reload categories after bulk import
-  };
-
   // Get unique salons for salon filter
   const uniqueSalons = Array.from(
     new Map(
@@ -260,12 +251,6 @@ const ServiceCategoriesPage: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            onClick={() => setShowBulkImportModal(true)}
-            icon={<Upload />}
-          >
-            Bulk Import
-          </Button>
           <Button
             onClick={() => setShowCreateModal(true)}
             icon={<Plus />}
@@ -681,12 +666,6 @@ const ServiceCategoriesPage: React.FC = () => {
       </Modal>
 
       {/* Bulk Import Modal */}
-      <BulkImportModal
-        isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
-        importType="service-categories"
-        onImportComplete={handleBulkImportComplete}
-      />
     </div>
   );
 };

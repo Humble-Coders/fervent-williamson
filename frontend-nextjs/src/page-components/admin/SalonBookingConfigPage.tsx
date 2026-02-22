@@ -6,7 +6,7 @@ import { Calendar, Clock, Settings, Save } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
-import { buildApiUrl } from '../../config/env';
+import { salonService } from '../../services/salonService';
 
 interface BookingConfig {
   salon: {
@@ -53,14 +53,25 @@ const SalonBookingConfigPage: React.FC = () => {
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      const response = await fetch(buildApiUrl(`booking-config/${salonId}`));
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch booking configuration');
-      }
-
-      const data = await response.json();
-      setConfig(data.data);
+      const salon = await salonService.getSalonById(salonId!);
+      // Extract booking config from salon document
+      const bookingConfig: BookingConfig = {
+        salon: {
+          id: salon.id,
+          displayId: (salon as any).displayId,
+          name: salon.name,
+        },
+        slotDuration: (salon as any).slotDuration || 30,
+        breakDuration: (salon as any).breakDuration || 0,
+        advanceBookingDays: (salon as any).advanceBookingDays || 30,
+        minimumNoticeHours: (salon as any).minimumNoticeHours || 2,
+        bufferTime: (salon as any).bufferTime || 15,
+        maxBookingsPerDay: (salon as any).maxBookingsPerDay || 20,
+        allowSameDayBooking: (salon as any).allowSameDayBooking ?? true,
+        enabledPaymentMethods: (salon as any).enabledPaymentMethods || [],
+        paymentMethods: (salon as any).paymentMethods || [],
+      };
+      setConfig(bookingConfig);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch configuration');
     } finally {
@@ -69,18 +80,8 @@ const SalonBookingConfigPage: React.FC = () => {
   };
 
   const fetchPaymentMethods = async () => {
-    try {
-      const response = await fetch(buildApiUrl('payment-methods/config'));
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch payment methods');
-      }
-
-      const data = await response.json();
-      setAvailablePaymentMethods(data.data);
-    } catch (err) {
-      logger.error('Error fetching payment methods:', err);
-    }
+    // Payment methods feature has been dropped; return empty array
+    setAvailablePaymentMethods([]);
   };
 
   const handleSave = async () => {
@@ -91,28 +92,16 @@ const SalonBookingConfigPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(buildApiUrl(`booking-config/${salonId}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          slotDuration: config.slotDuration,
-          breakDuration: config.breakDuration,
-          advanceBookingDays: config.advanceBookingDays,
-          minimumNoticeHours: config.minimumNoticeHours,
-          bufferTime: config.bufferTime,
-          maxBookingsPerDay: config.maxBookingsPerDay,
-          allowSameDayBooking: config.allowSameDayBooking,
-          enabledPaymentMethods: config.enabledPaymentMethods,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save configuration');
-      }
+      await salonService.updateSalon(salonId, {
+        slotDuration: config.slotDuration,
+        breakDuration: config.breakDuration,
+        advanceBookingDays: config.advanceBookingDays,
+        minimumNoticeHours: config.minimumNoticeHours,
+        bufferTime: config.bufferTime,
+        maxBookingsPerDay: config.maxBookingsPerDay,
+        allowSameDayBooking: config.allowSameDayBooking,
+        enabledPaymentMethods: config.enabledPaymentMethods,
+      } as any);
 
       setSuccess('Configuration saved successfully!');
       setTimeout(() => setSuccess(null), 3000);

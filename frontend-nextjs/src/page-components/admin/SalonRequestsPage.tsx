@@ -6,7 +6,7 @@ import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import Alert from '../../components/ui/Alert';
-import { buildApiUrl } from '../../config/env';
+import { adminSalonService } from '../../services/adminSalonService';
 
 interface SalonRequest {
   id: string;
@@ -57,32 +57,51 @@ const SalonRequestsPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString(),
-        ...(statusFilter !== 'all' && { status: statusFilter }),
-        ...(searchTerm && { search: searchTerm }),
-      });
+      // Fetch all salons from Firestore and treat them as "requests"
+      const allSalons = await adminSalonService.getAllSalons();
 
-      const response = await fetch(
-        buildApiUrl(`salon-requests?${params}`),
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
+      // Map salon data to SalonRequest interface
+      let salonRequests: SalonRequest[] = allSalons.map((salon: any) => ({
+        id: salon.id,
+        salonName: salon.name || '',
+        ownerName: salon.ownerName || '',
+        email: salon.email || '',
+        phone: salon.phone || '',
+        address: salon.address || '',
+        description: salon.description || '',
+        status: salon.isOpen === true ? 'APPROVED' : salon.isOpen === false ? 'PENDING' : 'PENDING',
+        adminNotes: salon.adminNotes || '',
+        reviewedAt: salon.reviewedAt || '',
+        reviewedBy: salon.reviewedBy || '',
+        createdAt: salon.createdAt || '',
+        updatedAt: salon.updatedAt || '',
+      }));
 
-      const data = await response.json();
-
-      if (data.success) {
-        setRequests(data.data.salonRequests);
-        setPagination(data.data.pagination);
-      } else {
-        setError(data.message || 'Failed to fetch salon requests');
+      // Apply status filter
+      if (statusFilter !== 'all') {
+        salonRequests = salonRequests.filter(r => r.status === statusFilter);
       }
+
+      // Apply search filter
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        salonRequests = salonRequests.filter(r =>
+          r.salonName.toLowerCase().includes(searchLower) ||
+          r.ownerName.toLowerCase().includes(searchLower) ||
+          r.email.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Apply pagination
+      const total = salonRequests.length;
+      const pages = Math.ceil(total / pagination.limit);
+      const start = (pagination.page - 1) * pagination.limit;
+      const paginatedRequests = salonRequests.slice(start, start + pagination.limit);
+
+      setRequests(paginatedRequests);
+      setPagination(prev => ({ ...prev, total, pages }));
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('Failed to fetch salon requests. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -93,30 +112,18 @@ const SalonRequestsPage: React.FC = () => {
       setActionLoading(requestId);
       setMessage(null);
 
-      const response = await fetch(
-        buildApiUrl(`salon-requests/${requestId}`),
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify({ status, adminNotes }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: `Salon request ${status.toLowerCase()} successfully` });
-        fetchRequests(); // Refresh the list
-        setShowModal(false);
-        setSelectedRequest(null);
+      if (status === 'APPROVED') {
+        await adminSalonService.approveSalon(requestId);
       } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to update salon request' });
+        await adminSalonService.suspendSalon(requestId, adminNotes);
       }
+
+      setMessage({ type: 'success', text: `Salon request ${status.toLowerCase()} successfully` });
+      fetchRequests(); // Refresh the list
+      setShowModal(false);
+      setSelectedRequest(null);
     } catch (err) {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      setMessage({ type: 'error', text: 'Failed to update salon request. Please try again.' });
     } finally {
       setActionLoading(null);
     }

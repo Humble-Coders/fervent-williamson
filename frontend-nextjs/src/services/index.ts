@@ -1,7 +1,3 @@
-// Core API exports
-export { apiClient, api, apiCall, TokenManager } from './api';
-export { BaseService, createService } from './BaseService';
-
 // Service layer barrel exports
 export { authService } from './authService';
 export { salonService } from './salonService';

@@ -17,12 +17,10 @@ import {
   Crown,
   Scissors,
   Gift,
-  CreditCard,
   FileText,
   User,
   ChevronDown,
-  Package,
-  TrendingUp
+  Package
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -49,9 +47,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { name: 'Services', href: '/admin/services', icon: Scissors },
     { name: 'Service Categories', href: '/admin/service-categories', icon: Package },
     { name: 'Offers', href: '/admin/offers', icon: Gift },
-    { name: 'Payment Methods', href: '/admin/payment-methods', icon: CreditCard },
     { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
-    { name: 'Coming Soon Analytics', href: '/admin/coming-soon-analytics', icon: TrendingUp },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 

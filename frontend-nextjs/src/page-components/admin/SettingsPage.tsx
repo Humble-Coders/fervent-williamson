@@ -8,8 +8,7 @@ import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
 import MultiSelect from '../../components/ui/MultiSelect';
 import Switch from '../../components/ui/Switch';
-import AnalyticsSettings from '../../components/admin/AnalyticsSettings';
-import { buildApiUrl } from '../../config/env';
+import { configService } from '../../services/configService';
 import {
   SYSTEM_CONFIG_DEFINITIONS,
   getConfigsByCategory,
@@ -432,16 +431,24 @@ const AdminSettingsPage: React.FC = () => {
 
   const fetchConfigs = async () => {
     try {
-      const response = await fetch(buildApiUrl('system-config'));
-      const data = await response.json();
-      
-      if (data.success) {
-        setConfigs(data.data);
-      } else {
-        setMessage({ type: 'error', text: 'Failed to load system configurations' });
-      }
+      const allConfigs = await configService.getAllConfigs();
+      // Map Firestore config docs to SystemConfig format
+      const mapped: SystemConfig[] = allConfigs.map((cfg: any) => ({
+        id: cfg.id,
+        key: cfg.key || cfg.id,
+        value: typeof cfg.value === 'object' ? JSON.stringify(cfg.value) : String(cfg.value ?? ''),
+        type: cfg.type || 'string',
+        category: cfg.category || 'system',
+        name: cfg.name || cfg.key || cfg.id,
+        description: cfg.description || '',
+        options: cfg.options || [],
+        allowAddOptions: cfg.allowAddOptions || false,
+        isActive: cfg.isActive !== false,
+      }));
+      setConfigs(mapped);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error loading configurations' });
+      logger.error('Error fetching configs:', error);
+      setMessage({ type: 'error', text: 'Failed to load system configurations' });
     } finally {
       setLoading(false);
     }
@@ -449,26 +456,14 @@ const AdminSettingsPage: React.FC = () => {
 
   const updateConfig = async (key: string, value: string) => {
     try {
-      const response = await fetch(buildApiUrl(`system-config/${key}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value }),
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setConfigs(configs.map(config => 
-          config.key === key ? { ...config, value } : config
-        ));
-        setMessage({ type: 'success', text: 'Configuration updated successfully' });
-      } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to update configuration' });
-      }
+      await configService.updateConfig(key, { value });
+      setConfigs(configs.map(config =>
+        config.key === key ? { ...config, value } : config
+      ));
+      setMessage({ type: 'success', text: 'Configuration updated successfully' });
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error updating configuration' });
+      logger.error('Error updating config:', error);
+      setMessage({ type: 'error', text: 'Failed to update configuration' });
     }
   };
 
@@ -564,38 +559,19 @@ const AdminSettingsPage: React.FC = () => {
         templateId: templateModal.templateId || ''
       };
 
-      if (templateModal.editIndex !== undefined) {
-        // Edit existing template via API
-        try {
-          const response = await fetch(`${buildApiUrl('/system-config')}/${templateModal.configKey}/templates/${newTemplate.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTemplate),
-          });
-
-          if (response.ok) {
-            fetchConfigs(); // Refresh configs
-            closeTemplateModal();
-          }
-        } catch (error) {
-          logger.error('Error updating template:', error);
+      try {
+        // Update templates in Firestore config doc
+        const updatedTemplates = [...templateOptions];
+        if (templateModal.editIndex !== undefined) {
+          updatedTemplates[templateModal.editIndex] = newTemplate;
+        } else {
+          updatedTemplates.push(newTemplate);
         }
-      } else {
-        // Add new template via API
-        try {
-          const response = await fetch(`${buildApiUrl('/system-config')}/${templateModal.configKey}/templates`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTemplate),
-          });
-
-          if (response.ok) {
-            fetchConfigs(); // Refresh configs
-            closeTemplateModal();
-          }
-        } catch (error) {
-          logger.error('Error adding template:', error);
-        }
+        await configService.updateConfig(templateModal.configKey, { options: updatedTemplates });
+        fetchConfigs();
+        closeTemplateModal();
+      } catch (error) {
+        logger.error('Error saving template:', error);
       }
     } else {
       // Legacy array type handling
@@ -637,13 +613,9 @@ const AdminSettingsPage: React.FC = () => {
 
       if (templateOptions[index]) {
         try {
-          const response = await fetch(`${buildApiUrl('/system-config')}/${configKey}/templates/${templateOptions[index].id}`, {
-            method: 'DELETE',
-          });
-
-          if (response.ok) {
-            fetchConfigs(); // Refresh configs
-          }
+          const updatedTemplates = templateOptions.filter((_: any, i: number) => i !== index);
+          await configService.updateConfig(configKey, { options: updatedTemplates });
+          fetchConfigs();
         } catch (error) {
           logger.error('Error deleting template:', error);
         }
@@ -714,27 +686,13 @@ const AdminSettingsPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${buildApiUrl('/system-config')}/${addOptionModal.configKey}/options`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          value: addOptionModal.optionValue.trim(),
-          label: addOptionModal.optionLabel.trim()
-        }),
+      await configService.addOption(addOptionModal.configKey, {
+        value: addOptionModal.optionValue.trim(),
+        label: addOptionModal.optionLabel.trim()
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Option added successfully' });
-        closeAddOptionModal();
-        // Refresh configs to get updated options
-        fetchConfigs();
-      } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to add option' });
-      }
+      setMessage({ type: 'success', text: 'Option added successfully' });
+      closeAddOptionModal();
+      fetchConfigs();
     } catch (error) {
       logger.error('Error adding option:', error);
       setMessage({ type: 'error', text: 'Failed to add option' });
@@ -1351,7 +1309,28 @@ const AdminSettingsPage: React.FC = () => {
           {/* Tab Content */}
           <div className="space-y-4">
             {activeTab === 'analytics' ? (
-              <AnalyticsSettings />
+              // Render analytics configs inline (same as other tabs)
+              getConfigsForTab('analytics').length > 0 ? (
+                getConfigsForTab('analytics').map((config) => (
+                  <div key={config.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
+                    <div className="flex-1 pr-8">
+                      <h4 className="text-sm font-medium text-gray-900">{config.name}</h4>
+                      <p className="text-sm text-gray-500">{config.description}</p>
+                    </div>
+                    <div className="ml-8 flex-shrink-0">
+                      {renderConfigInput(config)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <SettingsIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No analytics configurations</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Analytics settings will appear here once configured in the database.
+                  </p>
+                </div>
+              )
             ) : activeTab === 'authentication' ? (
               // Authentication sub-tab content
               activeSubTab === 'templates' ? (

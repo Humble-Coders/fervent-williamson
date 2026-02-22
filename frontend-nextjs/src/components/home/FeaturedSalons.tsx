@@ -9,7 +9,7 @@ import Button from '../ui/Button';
 import SalonRequestModal from '../modals/SalonRequestModal';
 import LoginModal from '../auth/LoginModal';
 import { useAuthPrompt } from '../../hooks/useAuthPrompt';
-import { buildApiUrl } from '../../config/env';
+import { configService } from '../../services/configService';
 import { getAbsoluteImageUrl } from '../../utils/imageUtils';
 import { generateSalonUrl } from '../../utils/urlUtils';
 
@@ -119,12 +119,9 @@ const FeaturedSalons: React.FC<FeaturedSalonsProps> = ({
   useEffect(() => {
     const checkSalonSignupConfig = async () => {
       try {
-        const response = await fetch(buildApiUrl('system-config/salon_self_signup_enabled'));
-        const data = await response.json();
-        if (data.success) {
-          const isEnabled = data.data.parsedValue === true || data.data.value === 'true';
-          setSalonSelfSignupEnabled(isEnabled);
-        }
+        const config = await configService.getConfig('salon_self_signup_enabled');
+        const isEnabled = config.value === 'true';
+        setSalonSelfSignupEnabled(isEnabled);
       } catch (error) {
         logger.error('Error checking salon signup config:', error);
       }
