@@ -1,221 +1,216 @@
-import { BaseService } from './BaseService';
+import {
+  FirestoreService,
+  SubcollectionService,
+  db,
+  doc,
+  getDoc,
+} from './firestore/firestoreService';
 import { logger } from '@/config/logger';
-import { apiClient } from './api';
-import { env } from '../config/env';
 import {
   Salon,
   SalonWithRelations,
   CreateSalonData,
   WorkingHours,
   Service as SalonService,
-  Stylist
+  Stylist,
 } from '../types';
-import { ApiResponse, SalonListParams } from '../types/api';
 
 // Re-export types for backward compatibility
 export type { WorkingHours, SalonService as Service, Stylist, CreateSalonData };
 
-/**
- * Admin salon service with specialized admin salon operations
- * Uses the admin endpoints for salon management
- */
-class AdminSalonServiceClass extends BaseService<Salon, CreateSalonData> {
-  constructor() {
-    // Use admin endpoint instead of public salon endpoint
-    super('/admin/salons');
-  }
+const salonsFs = new FirestoreService<Salon>('salons');
+const servicesSubFs = new SubcollectionService<SalonService>('salons', 'services');
+const stylistsSubFs = new SubcollectionService<Stylist>('salons', 'stylists');
 
+/**
+ * Admin salon service using Firestore
+ * Security rules enforce admin-only access
+ */
+class AdminSalonServiceClass {
   /**
-   * Upload images with organized folder structure
+   * Upload images (delegated to uploadService)
    */
   async uploadImages(files: File[], context?: {
     type: 'salon' | 'service' | 'stylist' | 'temp';
     salonId: string;
-    entityId?: string; // For service/stylist uploads
+    entityId?: string;
   }): Promise<string[]> {
-    logger.info('🔄 [FRONTEND] uploadImages called with:', {
+    logger.info('[FRONTEND] uploadImages called with:', {
       fileCount: files.length,
-      fileNames: files.map(f => f.name),
-      context
+      context,
     });
 
-    const formData = new FormData();
-    files.forEach(file => {
-      formData.append('images', file);
-    });
+    const { uploadService } = await import('./uploadService');
+    const folder = context
+      ? `${context.type}/${context.salonId}${context.entityId ? '/' + context.entityId : ''}`
+      : 'salons';
 
-    // Build query parameters for organized uploads
-    let url = '/upload/images';
-    if (context) {
-      const params = new URLSearchParams({
-        type: context.type,
-        salonId: context.salonId,
-      });
-      if (context.entityId) {
-        params.append('entityId', context.entityId);
-      }
-      url += `?${params.toString()}`;
-    }
+    const results = await Promise.all(
+      files.map((f) => uploadService.uploadImage(f, folder))
+    );
+    const urls = results.map((r) => r.url);
 
-    logger.info('📡 [FRONTEND] Making upload request to:', url);
-
-    const response = await apiClient.post<{ images: string[] }>(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    logger.info('📥 [FRONTEND] Upload response:', response.data);
-
-    // Convert relative URLs to absolute URLs
-    const backendBaseUrl = env.BACKEND_BASE_URL;
-    const absoluteUrls = response.data!.images.map(url => {
-      if (url.startsWith('http')) {
-        return url; // Already absolute
-      }
-      return `${backendBaseUrl}${url}`; // Convert relative to absolute
-    });
-
-    logger.info('✅ [FRONTEND] Final absolute URLs:', absoluteUrls);
-    return absoluteUrls;
+    logger.info('[FRONTEND] Final URLs:', urls);
+    return urls;
   }
 
   /**
-   * Upload images to temp folder (for new services/stylists before creation)
+   * Upload images to temp folder
    */
   async uploadTempImages(files: File[]): Promise<string[]> {
-    logger.info('🔄 [FRONTEND] uploadTempImages called with files:', { files: files.map(f => ({ name: f.name, size: f.size })) });
-    const result = await this.uploadImages(files, { type: 'temp', salonId: '', entityId: '' });
-    logger.info('✅ [FRONTEND] uploadTempImages result:', result);
-    return result;
+    logger.info('[FRONTEND] uploadTempImages called');
+    return this.uploadImages(files, { type: 'temp', salonId: '', entityId: '' });
   }
 
   /**
-   * Organize temp images into proper folder structure after entity creation
+   * Organize temp images - with Firebase Storage, images are already permanent
    */
-  async organizeImages(tempUrls: string[], type: 'service' | 'stylist', salonId: string, entityId: string): Promise<string[]> {
-    const response = await apiClient.post<{ organizedUrls: string[] }>('/upload/organize', {
-      type,
-      salonId,
-      entityId,
-      tempUrls,
+  async organizeImages(tempUrls: string[], _type: 'service' | 'stylist', _salonId: string, _entityId: string): Promise<string[]> {
+    return tempUrls;
+  }
+
+  /**
+   * Get all salons for admin
+   */
+  async getAllSalons(_params?: Record<string, any>): Promise<SalonWithRelations[]> {
+    const salons = await salonsFs.getAll({
+      sort: { field: 'createdAt', direction: 'desc' },
     });
 
-    return response.data!.organizedUrls;
+    const enriched: SalonWithRelations[] = await Promise.all(
+      salons.map(async (salon) => {
+        try {
+          const [services, stylists] = await Promise.all([
+            servicesSubFs.getAll(salon.id),
+            stylistsSubFs.getAll(salon.id),
+          ]);
+          return {
+            ...salon,
+            services,
+            stylists,
+            _count: {
+              services: services.length,
+              stylists: stylists.length,
+              reviews: salon.reviewCount || 0,
+              bookings: 0,
+            },
+          };
+        } catch {
+          return {
+            ...salon,
+            _count: { services: 0, stylists: 0, reviews: 0, bookings: 0 },
+          };
+        }
+      })
+    );
+
+    return enriched;
   }
 
   /**
-   * Get all salons for admin (uses admin endpoint)
-   */
-  async getAllSalons(params?: SalonListParams): Promise<SalonWithRelations[]> {
-    const response = await apiClient.get<{ salons: SalonWithRelations[] }>('/admin/salons', { params });
-    return response.data!.salons;
-  }
-
-  /**
-   * Get salon by ID (uses public endpoint since admin can access any salon)
+   * Get salon by ID
    */
   async getSalonById(id: string): Promise<SalonWithRelations> {
-    const response = await apiClient.get<SalonWithRelations>(`/salons/${id}`);
-    return response.data!;
+    const salon = await salonsFs.getById(id);
+    const [services, stylists] = await Promise.all([
+      servicesSubFs.getAll(id),
+      stylistsSubFs.getAll(id),
+    ]);
+
+    return {
+      ...salon,
+      services,
+      stylists,
+      _count: {
+        services: services.length,
+        stylists: stylists.length,
+        reviews: salon.reviewCount || 0,
+        bookings: 0,
+      },
+    };
   }
 
   /**
-   * Get salon with complete data including all images (salon, services, stylists)
+   * Get salon with complete data
    */
   async getSalonComplete(id: string): Promise<SalonWithRelations> {
-    const response = await apiClient.get<SalonWithRelations>(`/salons/${id}/complete`);
-    return response.data!;
+    return this.getSalonById(id);
   }
 
   /**
-   * Create salon (uses public endpoint)
+   * Create salon
    */
   async createSalon(salonData: CreateSalonData): Promise<Salon> {
-    logger.info('🔄 [FRONTEND] createSalon called with data:', {
-      ...salonData,
-      services: salonData.services?.map(s => ({
-        name: s.name,
-        imageCount: s.images?.length || 0,
-        images: s.images
-      }))
-    });
-    const response = await apiClient.post<Salon>('/salons', salonData);
-    logger.info('✅ [FRONTEND] createSalon response:', response.data);
-    return response.data!;
+    logger.info('[FRONTEND] createSalon called');
+    return salonsFs.create(salonData as any);
   }
 
   /**
-   * Update salon (uses admin endpoint)
+   * Update salon
    */
   async updateSalon(id: string, salonData: Partial<CreateSalonData>): Promise<Salon> {
-    const response = await apiClient.patch<Salon>(`/admin/salons/${id}`, salonData);
-    return response.data!;
+    return salonsFs.update(id, salonData as any);
   }
 
   /**
-   * Delete salon (uses admin endpoint)
+   * Delete salon
    */
   async deleteSalon(id: string): Promise<void> {
-    await apiClient.delete<void>(`/admin/salons/${id}`);
+    await salonsFs.delete(id);
   }
 
   /**
-   * Toggle salon featured status (admin only)
+   * Toggle salon featured status
    */
   async toggleFeatured(salonId: string | number): Promise<Salon> {
-    const response = await apiClient.patch<Salon>(`/admin/salons/${salonId}`, { 
-      featured: true // This would need to be determined by current state
-    });
-    return response.data!;
+    const sid = String(salonId);
+    const salon = await salonsFs.getById(sid);
+    return salonsFs.update(sid, { featured: !salon.featured } as any);
   }
 
   /**
-   * Get salon statistics (admin only)
+   * Get salon statistics
    */
   async getSalonStats(salonId: string): Promise<any> {
-    const response = await apiClient.get<any>(`/admin/stats/salons/${salonId}`);
-    return response.data!;
+    const salon = await salonsFs.getById(salonId);
+    return {
+      rating: salon.rating || 0,
+      reviewCount: salon.reviewCount || 0,
+      isOpen: salon.isOpen,
+    };
   }
 
   /**
-   * Approve salon (admin only)
+   * Approve salon
    */
   async approveSalon(salonId: string): Promise<Salon> {
-    const response = await apiClient.patch<Salon>(`/admin/salons/${salonId}`, { 
-      isApproved: true 
-    });
-    return response.data!;
+    return salonsFs.update(salonId, { isOpen: true } as any);
   }
 
   /**
-   * Suspend salon (admin only)
+   * Suspend salon
    */
-  async suspendSalon(salonId: string, reason?: string): Promise<Salon> {
-    const response = await apiClient.patch<Salon>(`/admin/salons/${salonId}`, {
-      isOpen: false,
-      suspensionReason: reason
-    });
-    return response.data!;
+  async suspendSalon(salonId: string, _reason?: string): Promise<Salon> {
+    return salonsFs.update(salonId, { isOpen: false } as any);
   }
 
   /**
-   * Create service (admin only)
+   * Create service (admin)
    */
   async createService(serviceData: any): Promise<any> {
-    const response = await apiClient.post<any>('/services', serviceData);
-    return response.data!;
+    const salonId = serviceData.salonId;
+    if (!salonId) throw new Error('salonId is required');
+    return servicesSubFs.create(salonId, serviceData);
   }
 
   /**
-   * Update service (admin only)
+   * Update service (admin)
    */
   async updateService(serviceId: string, serviceData: any): Promise<any> {
-    const response = await apiClient.put<any>(`/services/${serviceId}`, serviceData);
-    return response.data!;
+    const salonId = serviceData.salonId;
+    if (!salonId) throw new Error('salonId is required');
+    return servicesSubFs.update(salonId, serviceId, serviceData);
   }
-
-
 }
 
 // Create and export the admin service instance

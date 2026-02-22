@@ -1,4 +1,12 @@
-import { api } from './api';
+import {
+  FirestoreService,
+  SubcollectionService,
+  db,
+  writeBatch,
+  doc,
+} from './firestore/firestoreService';
+import { auth } from '@/config/firebase';
+import { getDoc } from 'firebase/firestore';
 import { logger } from '@/config/logger';
 
 export interface ServiceCategory {
@@ -44,97 +52,107 @@ export interface ServiceCategoryWithSalon extends ServiceCategory {
   };
 }
 
-interface CategoriesResponse {
-  success: boolean;
-  data: ServiceCategory[];
-  message: string;
-}
+const categoriesFs = new FirestoreService<ServiceCategory>('serviceCategories');
 
-interface CategoryResponse {
-  success: boolean;
-  data: ServiceCategoryWithServices;
-  message: string;
-}
-
-interface CategoriesWithSalonResponse {
-  success: boolean;
-  data: ServiceCategoryWithSalon[];
-  message: string;
+/**
+ * Get the current user's salonId from their Firestore profile
+ */
+async function getOwnerSalonId(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  const salonId = userDoc.data()?.salonId;
+  if (!salonId) throw new Error('User does not own a salon');
+  return salonId;
 }
 
 export const categoryService = {
   // Get all service categories
   async getAllCategories(): Promise<ServiceCategory[]> {
     try {
-      const response = await api.get<CategoriesResponse>('/categories');
-      return (response.data as any).data;
+      return await categoriesFs.getAll({
+        sort: { field: 'dashboardSortOrder', direction: 'asc' },
+      });
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch categories');
+      throw new Error(error.message || 'Failed to fetch categories');
     }
   },
 
-  // Get all service categories (global + salon-specific) for admin
+  // Get all service categories for admin
   async getAllCategoriesForAdmin(search?: string, type?: 'global' | 'salon'): Promise<ServiceCategoryWithSalon[]> {
     try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (type) params.append('type', type);
+      const categories = await categoriesFs.getAll({
+        sort: { field: 'dashboardSortOrder', direction: 'asc' },
+      });
 
-      const response = await api.get<CategoriesWithSalonResponse>(`/categories/all?${params.toString()}`);
-      return (response.data as any).data;
+      let filtered = categories as (ServiceCategory & { isGlobal?: boolean })[];
+
+      // Client-side search filter
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(
+          (c) => c.name.toLowerCase().includes(searchLower) || c.description?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Map to ServiceCategoryWithSalon format
+      return filtered.map((c) => ({
+        ...c,
+        isGlobal: true, // All categories in top-level collection are global
+        _count: { services: 0 },
+      }));
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch categories');
+      throw new Error(error.message || 'Failed to fetch categories');
     }
   },
 
   // Get category by ID with services
   async getCategoryById(id: string): Promise<ServiceCategoryWithServices> {
     try {
-      const response = await api.get<CategoryResponse>(`/categories/${id}`);
-      return (response.data as any).data;
+      const category = await categoriesFs.getById(id);
+      // Services would be fetched separately by the consumer
+      return { ...category, services: [] };
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch category');
+      throw new Error(error.message || 'Failed to fetch category');
     }
   },
 
   // Create new category (Admin only)
   async createCategory(categoryData: Omit<ServiceCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<ServiceCategory> {
     try {
-      const response = await api.post<CategoryResponse>('/categories', categoryData);
-      return (response.data as any).data as ServiceCategory;
+      return await categoriesFs.create(categoryData as any);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to create category');
+      throw new Error(error.message || 'Failed to create category');
     }
   },
 
   // Update category (Admin only)
   async updateCategory(id: string, categoryData: Partial<Omit<ServiceCategory, 'id' | 'createdAt' | 'updatedAt'>>): Promise<ServiceCategory> {
     try {
-      const response = await api.put<CategoryResponse>(`/categories/${id}`, categoryData);
-      return (response.data as any).data as ServiceCategory;
+      return await categoriesFs.update(id, categoryData as any);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update category');
+      throw new Error(error.message || 'Failed to update category');
     }
   },
 
   // Delete category (Admin only)
   async deleteCategory(id: string): Promise<void> {
     try {
-      await api.delete(`/categories/${id}`);
+      await categoriesFs.delete(id);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to delete category');
+      throw new Error(error.message || 'Failed to delete category');
     }
   },
 
   // Get visible categories for dashboard based on configuration
   async getVisibleCategories(): Promise<ServiceCategory[]> {
     try {
-      // Use the new dashboardVisible query parameter to get only visible categories
-      const response = await api.get<CategoriesResponse>('/categories?dashboardVisible=true');
-      return (response.data as any).data;
+      return await categoriesFs.getAll({
+        filters: [{ field: 'isDashboardVisible', op: '==', value: true }],
+        sort: { field: 'dashboardSortOrder', direction: 'asc' },
+      });
     } catch (error: any) {
       logger.error('Error fetching visible categories, falling back to all categories:', error);
-      // Final fallback to all global categories
       return this.getAllCategories();
     }
   },
@@ -142,23 +160,37 @@ export const categoryService = {
   // Update category dashboard visibility (Admin only)
   async updateCategoryVisibility(id: string, isDashboardVisible: boolean, dashboardSortOrder?: number): Promise<ServiceCategory> {
     try {
-      const response = await api.put<CategoryResponse>(`/categories/${id}/visibility`, {
-        isDashboardVisible,
-        ...(dashboardSortOrder !== undefined && { dashboardSortOrder })
-      });
-      return (response.data as any).data as ServiceCategory;
+      const updateData: any = { isDashboardVisible };
+      if (dashboardSortOrder !== undefined) {
+        updateData.dashboardSortOrder = dashboardSortOrder;
+      }
+      return await categoriesFs.update(id, updateData);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update category visibility');
+      throw new Error(error.message || 'Failed to update category visibility');
     }
   },
 
   // Update multiple categories visibility (Admin only)
-  async updateBulkVisibility(updates: Array<{id: string, isDashboardVisible: boolean, dashboardSortOrder?: number}>): Promise<ServiceCategory[]> {
+  async updateBulkVisibility(updates: Array<{ id: string; isDashboardVisible: boolean; dashboardSortOrder?: number }>): Promise<ServiceCategory[]> {
     try {
-      const response = await api.put('/categories/bulk-visibility', { updates });
-      return (response.data as any).data as ServiceCategory[];
+      const batch = writeBatch(db);
+
+      updates.forEach((update) => {
+        const ref = doc(db, 'serviceCategories', update.id);
+        const data: any = { isDashboardVisible: update.isDashboardVisible };
+        if (update.dashboardSortOrder !== undefined) {
+          data.dashboardSortOrder = update.dashboardSortOrder;
+        }
+        batch.update(ref, data);
+      });
+
+      await batch.commit();
+
+      // Fetch updated categories
+      const results = await Promise.all(updates.map((u) => categoriesFs.getById(u.id)));
+      return results;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update categories visibility');
+      throw new Error(error.message || 'Failed to update categories visibility');
     }
   },
 };

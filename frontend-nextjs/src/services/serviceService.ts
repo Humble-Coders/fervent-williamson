@@ -1,4 +1,16 @@
-import { api } from './api';
+import {
+  SubcollectionService,
+  db,
+  collection,
+  collectionGroup,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+} from './firestore/firestoreService';
+import { docToObject } from './firestore/firestoreService';
+import { auth } from '@/config/firebase';
 
 export interface ServiceCategory {
   id: string;
@@ -60,7 +72,7 @@ export interface CreateServiceData {
   emoji?: string;
   gender?: 'MALE' | 'FEMALE' | 'UNISEX';
   images?: string[];
-  salonId?: string; // Made optional - backend will get from authenticated user
+  salonId?: string;
   categoryId: string;
   isActive?: boolean;
 }
@@ -79,18 +91,6 @@ export interface UpdateServiceData {
   isActive?: boolean;
 }
 
-export interface ServiceResponse {
-  success: boolean;
-  data: Service;
-  message: string;
-}
-
-export interface ServicesResponse {
-  success: boolean;
-  data: Service[];
-  message: string;
-}
-
 export interface ServiceFilters {
   salonId?: string;
   categoryId?: string;
@@ -98,76 +98,103 @@ export interface ServiceFilters {
   popular?: boolean;
 }
 
+const servicesSubFs = new SubcollectionService<Service>('salons', 'services');
+
+/**
+ * Get the current user's salonId from their Firestore profile
+ */
+async function getOwnerSalonId(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  const salonId = userDoc.data()?.salonId;
+  if (!salonId) throw new Error('User does not own a salon');
+  return salonId;
+}
+
 export const serviceService = {
   // Get all services with optional filters
   async getAllServices(filters?: ServiceFilters): Promise<Service[]> {
     try {
-      const params = new URLSearchParams();
-      if (filters?.salonId) params.append('salonId', filters.salonId);
-      if (filters?.categoryId) params.append('categoryId', filters.categoryId);
-      if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
-      if (filters?.popular !== undefined) params.append('popular', filters.popular.toString());
+      // If salonId is provided, use subcollection query
+      if (filters?.salonId) {
+        const queryFilters: { field: string; op: any; value: any }[] = [];
+        if (filters.categoryId) queryFilters.push({ field: 'categoryId', op: '==', value: filters.categoryId });
+        if (filters.isActive !== undefined) queryFilters.push({ field: 'isActive', op: '==', value: filters.isActive });
+        if (filters.popular !== undefined) queryFilters.push({ field: 'popular', op: '==', value: filters.popular });
 
-      const queryString = params.toString();
-      const url = queryString ? `/services?${queryString}` : '/services';
-      
-      const response = await api.get<ServicesResponse>(url);
-      return (response.data as any).data;
+        return servicesSubFs.getAll(filters.salonId, { filters: queryFilters });
+      }
+
+      // Cross-salon query using collectionGroup
+      const constraints: any[] = [];
+      if (filters?.isActive !== undefined) constraints.push(where('isActive', '==', filters.isActive));
+      if (filters?.popular !== undefined) constraints.push(where('popular', '==', filters.popular));
+      if (filters?.categoryId) constraints.push(where('categoryId', '==', filters.categoryId));
+
+      const q = query(collectionGroup(db, 'services'), ...constraints);
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => docToObject<Service>(d));
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch services');
+      throw new Error(error.message || 'Failed to fetch services');
     }
   },
 
-  // Get service by ID
-  async getServiceById(serviceId: string): Promise<Service> {
+  // Get service by ID (requires salonId)
+  async getServiceById(serviceId: string, salonId?: string): Promise<Service> {
     try {
-      const response = await api.get<ServiceResponse>(`/services/${serviceId}`);
-      return (response.data as any).data;
+      if (salonId) {
+        return servicesSubFs.getById(salonId, serviceId);
+      }
+      // If no salonId, try to get from current user's salon
+      const ownerSalonId = await getOwnerSalonId();
+      return servicesSubFs.getById(ownerSalonId, serviceId);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch service');
+      throw new Error(error.message || 'Failed to fetch service');
     }
   },
 
   // Create a new service
   async createService(serviceData: CreateServiceData): Promise<Service> {
     try {
-      // Ensure numeric fields are properly typed (convert from string if needed)
-      const sanitizedData: CreateServiceData = {
+      const salonId = serviceData.salonId || (await getOwnerSalonId());
+      const sanitizedData = {
         ...serviceData,
+        salonId,
         price: Number(serviceData.price),
         duration: Number(serviceData.duration),
+        isActive: serviceData.isActive ?? true,
+        popular: serviceData.popular ?? false,
+        gender: serviceData.gender || 'UNISEX',
       };
-
-      const response = await api.post<ServiceResponse>('/services', sanitizedData);
-      return (response.data as any).data;
+      return servicesSubFs.create(salonId, sanitizedData as any);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to create service');
+      throw new Error(error.message || 'Failed to create service');
     }
   },
 
   // Update a service
   async updateService(serviceId: string, serviceData: UpdateServiceData): Promise<Service> {
     try {
-      // Ensure numeric fields are properly typed (convert from string if needed)
+      const salonId = serviceData.salonId || (await getOwnerSalonId());
       const sanitizedData: UpdateServiceData = {
         ...serviceData,
         ...(serviceData.price !== undefined && { price: Number(serviceData.price) }),
         ...(serviceData.duration !== undefined && { duration: Number(serviceData.duration) }),
       };
-
-      const response = await api.put<ServiceResponse>(`/services/${serviceId}`, sanitizedData);
-      return (response.data as any).data;
+      return servicesSubFs.update(salonId, serviceId, sanitizedData as any);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update service');
+      throw new Error(error.message || 'Failed to update service');
     }
   },
 
   // Delete a service
-  async deleteService(serviceId: string): Promise<void> {
+  async deleteService(serviceId: string, salonId?: string): Promise<void> {
     try {
-      await api.delete(`/services/${serviceId}`);
+      const sid = salonId || (await getOwnerSalonId());
+      await servicesSubFs.delete(sid, serviceId);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to delete service');
+      throw new Error(error.message || 'Failed to delete service');
     }
   },
 
@@ -193,19 +220,9 @@ export const serviceService = {
 
   // Update a subservice
   async updateSubService(subServiceId: string, subServiceData: Partial<SubService>): Promise<SubService> {
-    try {
-      // Ensure numeric fields are properly typed (convert from string if needed)
-      const sanitizedData: Partial<SubService> = {
-        ...subServiceData,
-        ...(subServiceData.price !== undefined && { price: Number(subServiceData.price) }),
-        ...(subServiceData.duration !== undefined && { duration: Number(subServiceData.duration) }),
-      };
-
-      const response = await api.put<{ success: boolean; data: SubService; message: string }>(`/subservices/${subServiceId}`, sanitizedData);
-      return (response.data as any).data;
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to update subservice');
-    }
+    // SubServices are stored as a nested field or sub-subcollection
+    // For simplicity, this is a placeholder - implement based on actual data model
+    throw new Error('SubService updates should be handled through the parent service');
   },
 
   // Format price for display
@@ -221,59 +238,43 @@ export const serviceService = {
     if (duration < 60) {
       return `${duration} min`;
     }
-    
     const hours = Math.floor(duration / 60);
     const minutes = duration % 60;
-    
     if (minutes === 0) {
       return `${hours} hr${hours > 1 ? 's' : ''}`;
     }
-    
     return `${hours} hr${hours > 1 ? 's' : ''} ${minutes} min`;
   },
 
   // Get service status color for UI
   getServiceStatusColor(service: Service): string {
-    if (!service.isActive) {
-      return 'text-red-600 bg-red-100';
-    }
-    if (service.popular) {
-      return 'text-purple-600 bg-purple-100';
-    }
+    if (!service.isActive) return 'text-red-600 bg-red-100';
+    if (service.popular) return 'text-purple-600 bg-purple-100';
     return 'text-green-600 bg-green-100';
   },
 
   // Get service status text
   getServiceStatusText(service: Service): string {
-    if (!service.isActive) {
-      return 'Inactive';
-    }
-    if (service.popular) {
-      return 'Popular';
-    }
+    if (!service.isActive) return 'Inactive';
+    if (service.popular) return 'Popular';
     return 'Active';
   },
 
   // Validate service data
   validateServiceData(data: CreateServiceData | UpdateServiceData): string[] {
     const errors: string[] = [];
-
     if ('name' in data && data.name && data.name.trim().length < 2) {
       errors.push('Service name must be at least 2 characters long');
     }
-
     if ('description' in data && data.description && data.description.trim().length < 10) {
       errors.push('Description must be at least 10 characters long');
     }
-
     if ('duration' in data && data.duration !== undefined && data.duration < 1) {
       errors.push('Duration must be at least 1 minute');
     }
-
     if ('price' in data && data.price !== undefined && data.price < 0) {
       errors.push('Price must be non-negative');
     }
-
     return errors;
   },
 
@@ -286,21 +287,13 @@ export const serviceService = {
     averageDuration: number;
   } {
     const totalServices = services.length;
-    const activeServices = services.filter(s => s.isActive).length;
-    const popularServices = services.filter(s => s.popular).length;
-    
+    const activeServices = services.filter((s) => s.isActive).length;
+    const popularServices = services.filter((s) => s.popular).length;
     const totalPrice = services.reduce((sum, s) => sum + s.price, 0);
     const averagePrice = totalServices > 0 ? totalPrice / totalServices : 0;
-    
     const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
     const averageDuration = totalServices > 0 ? totalDuration / totalServices : 0;
 
-    return {
-      totalServices,
-      activeServices,
-      popularServices,
-      averagePrice,
-      averageDuration,
-    };
-  }
+    return { totalServices, activeServices, popularServices, averagePrice, averageDuration };
+  },
 };

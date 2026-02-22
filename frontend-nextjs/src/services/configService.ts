@@ -1,8 +1,12 @@
-// System configuration service
-import { env } from '../config/env';
+import {
+  FirestoreService,
+  db,
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+} from './firestore/firestoreService';
 import { logger } from '@/config/logger';
-
-const API_BASE_URL = env.API_URL;
 
 export interface SystemConfig {
   id: string;
@@ -17,30 +21,13 @@ export interface SystemConfig {
   isActive: boolean;
 }
 
-export interface ConfigResponse {
-  success: boolean;
-  data: SystemConfig[];
-  message: string;
-}
-
-export interface SingleConfigResponse {
-  success: boolean;
-  data: SystemConfig;
-  message: string;
-}
+const configFs = new FirestoreService<SystemConfig>('config');
 
 class ConfigService {
   // Get all system configurations
   async getAllConfigs(): Promise<SystemConfig[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/system-config`);
-      const data: ConfigResponse = await response.json();
-      
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Failed to fetch configurations');
-      }
+      return await configFs.getAll();
     } catch (error) {
       logger.error('Error fetching configurations:', error);
       throw error;
@@ -50,14 +37,12 @@ class ConfigService {
   // Get a specific configuration by key
   async getConfig(key: string): Promise<SystemConfig> {
     try {
-      const response = await fetch(`${API_BASE_URL}/system-config/${key}`);
-      const data: SingleConfigResponse = await response.json();
-      
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Failed to fetch configuration');
+      const docSnap = await getDoc(doc(db, 'config', key));
+      if (!docSnap.exists()) {
+        throw new Error(`Configuration ${key} not found`);
       }
+      const data = docSnap.data();
+      return { id: docSnap.id, key: docSnap.id, ...data } as SystemConfig;
     } catch (error) {
       logger.error(`Error fetching configuration ${key}:`, error);
       throw error;
@@ -67,21 +52,12 @@ class ConfigService {
   // Update a configuration
   async updateConfig(key: string, value: string): Promise<SystemConfig> {
     try {
-      const response = await fetch(`${API_BASE_URL}/system-config/${key}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value }),
+      const ref = doc(db, 'config', key);
+      await updateDoc(ref, {
+        value,
+        updatedAt: serverTimestamp(),
       });
-
-      const data: SingleConfigResponse = await response.json();
-
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Failed to update configuration');
-      }
+      return this.getConfig(key);
     } catch (error) {
       logger.error(`Error updating configuration ${key}:`, error);
       throw error;
@@ -91,54 +67,47 @@ class ConfigService {
   // Add a new option to a select field
   async addOption(key: string, value: string, label: string): Promise<{ key: string; options: Array<{ value: string; label: string }> }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/system-config/${key}/options`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value, label }),
+      const config = await this.getConfig(key);
+      const options = config.options || [];
+      options.push({ value, label });
+
+      await updateDoc(doc(db, 'config', key), {
+        options,
+        updatedAt: serverTimestamp(),
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Failed to add option');
-      }
+      return { key, options };
     } catch (error) {
       logger.error(`Error adding option to ${key}:`, error);
       throw error;
     }
   }
 
-  // Helper methods for specific configurations
+  // Helper: check email verification
   async isEmailVerificationEnabled(): Promise<boolean> {
     try {
       const config = await this.getConfig('email_verification_enabled');
       return config.value === 'true';
-    } catch (error) {
-      logger.error('Error checking email verification status:', error);
-      return true; // Default to enabled if error
+    } catch {
+      return true;
     }
   }
 
+  // Helper: check SMS verification
   async isSmsVerificationEnabled(): Promise<boolean> {
     try {
       const config = await this.getConfig('sms_verification_enabled');
       return config.value === 'true';
-    } catch (error) {
-      logger.error('Error checking SMS verification status:', error);
-      return true; // Default to enabled if error
+    } catch {
+      return true;
     }
   }
 
+  // Helper: check verification by type
   async isVerificationEnabled(type: 'email' | 'phone'): Promise<boolean> {
-    if (type === 'email') {
-      return this.isEmailVerificationEnabled();
-    } else {
-      return this.isSmsVerificationEnabled();
-    }
+    return type === 'email'
+      ? this.isEmailVerificationEnabled()
+      : this.isSmsVerificationEnabled();
   }
 
   // Get configuration value as boolean

@@ -1,4 +1,17 @@
-import { apiCall } from './api';
+import {
+  FirestoreService,
+  db,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  getCountFromServer,
+  doc,
+  getDoc,
+} from './firestore/firestoreService';
+import { docToObject } from './firestore/firestoreService';
 
 export interface AdminUser {
   id: string;
@@ -32,11 +45,6 @@ export interface AdminUserDetail extends AdminUser {
     createdAt: string;
     salon: { id: string; name: string };
   }>;
-  loyaltyAccount?: {
-    points: number;
-    totalSpent: number;
-    level: string;
-  };
 }
 
 export interface UsersResponse {
@@ -101,6 +109,8 @@ export interface AdminStats {
   }>;
 }
 
+const usersFs = new FirestoreService<AdminUser>('users');
+
 export const adminService = {
   // Get all users with pagination and filters
   async getUsers(params?: {
@@ -110,59 +120,198 @@ export const adminService = {
     role?: string;
     status?: string;
   }): Promise<UsersResponse> {
-    const searchParams = new URLSearchParams();
+    const pageSize = params?.limit || 20;
 
-    if (params?.page) searchParams.append('page', params.page.toString());
-    if (params?.limit) searchParams.append('limit', params.limit.toString());
-    if (params?.search) searchParams.append('search', params.search);
-    if (params?.role) searchParams.append('role', params.role);
-    if (params?.status) searchParams.append('status', params.status);
+    const filters: { field: string; op: any; value: any }[] = [];
+    if (params?.role) filters.push({ field: 'role', op: '==', value: params.role });
+    if (params?.status === 'active') filters.push({ field: 'isActive', op: '==', value: true });
+    if (params?.status === 'inactive') filters.push({ field: 'isActive', op: '==', value: false });
 
-    const response = await apiCall(`/admin/users?${searchParams.toString()}`);
-    return response.data as any;
+    let users = await usersFs.getAll({
+      filters,
+      sort: { field: 'createdAt', direction: 'desc' },
+    });
+
+    // Client-side search filter
+    if (params?.search) {
+      const searchLower = params.search.toLowerCase();
+      users = users.filter(
+        (u) =>
+          u.name?.toLowerCase().includes(searchLower) ||
+          u.email?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    const total = users.length;
+    const page = params?.page || 1;
+    const start = (page - 1) * pageSize;
+    const paginatedUsers = users.slice(start, start + pageSize);
+
+    return {
+      users: paginatedUsers,
+      pagination: {
+        page,
+        limit: pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
+      },
+    };
   },
 
   // Get user by ID
   async getUserById(id: string): Promise<AdminUserDetail> {
-    const response = await apiCall(`/admin/users/${id}`);
-    return response.data as any;
+    const user = await usersFs.getById(id);
+
+    // Fetch user's bookings
+    const bookingsQuery = query(
+      collection(db, 'bookings'),
+      where('userId', '==', id),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    const bookingsSnap = await getDocs(bookingsQuery);
+    const bookings = bookingsSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        status: data.status,
+        totalAmount: data.totalPrice || 0,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || '',
+        salon: { id: data.salonId || '', name: data.salon?.name || '' },
+        service: { id: data.serviceId || '', name: data.service?.name || '' },
+      };
+    });
+
+    // Fetch user's reviews
+    const reviewsQuery = query(
+      collection(db, 'reviews'),
+      where('userId', '==', id),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    const reviewsSnap = await getDocs(reviewsQuery);
+    const reviews = reviewsSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        rating: data.rating,
+        comment: data.comment,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || '',
+        salon: { id: data.salonId || '', name: '' },
+      };
+    });
+
+    return { ...user, bookings, reviews };
   },
 
   // Update user
   async updateUser(id: string, data: UpdateUserData): Promise<AdminUser> {
-    const response = await apiCall(`/admin/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    return response.data as any;
+    return usersFs.update(id, data as any);
   },
 
   // Delete/deactivate user
   async deleteUser(id: string): Promise<void> {
-    await apiCall(`/admin/users/${id}`, {
-      method: 'DELETE',
-    });
+    await usersFs.update(id, { isActive: false } as any);
   },
 
   // Get admin dashboard stats
   async getStats(): Promise<AdminStats> {
-    const response = await apiCall('/admin/stats');
-    return response.data as any;
-  },
-  // Verify setup password and get admins
-  async verifySetupPassword(setupPassword: string): Promise<{ admins: Array<{ id: string; name: string; email: string }> }> {
-    const response = await apiCall('/admin/signup/verify-setup-password', {
-      method: 'POST',
-      body: JSON.stringify({ setupPassword }),
+    const [totalUsersSnap, activeSalonsSnap, totalBookingsSnap] = await Promise.all([
+      getCountFromServer(collection(db, 'users')),
+      getCountFromServer(query(collection(db, 'salons'), where('isOpen', '==', true))),
+      getCountFromServer(collection(db, 'bookings')),
+    ]);
+
+    const totalUsers = totalUsersSnap.data().count;
+    const activeSalons = activeSalonsSnap.data().count;
+    const totalBookings = totalBookingsSnap.data().count;
+
+    const [activeUsersSnap, totalSalonsSnap] = await Promise.all([
+      getCountFromServer(query(collection(db, 'users'), where('isActive', '==', true))),
+      getCountFromServer(collection(db, 'salons')),
+    ]);
+
+    // Get recent users
+    const recentUsersQuery = query(
+      collection(db, 'users'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+    const recentUsersSnap = await getDocs(recentUsersQuery);
+    const recentUsers = recentUsersSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: data.name || '',
+        email: data.email || '',
+        role: data.role || 'CUSTOMER',
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || '',
+      };
     });
-    return response.data as any;
+
+    // Get recent bookings
+    const recentBookingsQuery = query(
+      collection(db, 'bookings'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+    const recentBookingsSnap = await getDocs(recentBookingsQuery);
+    const recentBookings = recentBookingsSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        status: data.status || '',
+        totalAmount: data.totalPrice || 0,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || '',
+        user: { name: data.user?.name || '', email: data.user?.email || '' },
+        salon: { name: data.salon?.name || '' },
+        service: { name: data.service?.name || '' },
+      };
+    });
+
+    // Booking status distribution
+    const statuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
+    const statusCounts = await Promise.all(
+      statuses.map(async (status) => {
+        const snap = await getCountFromServer(
+          query(collection(db, 'bookings'), where('status', '==', status))
+        );
+        return { status, count: snap.data().count };
+      })
+    );
+
+    return {
+      overview: {
+        totalUsers,
+        activeUsers: activeUsersSnap.data().count,
+        totalSalons: totalSalonsSnap.data().count,
+        activeSalons,
+        totalBookings,
+        totalRevenue: 0,
+      },
+      recent: {
+        users: recentUsers,
+        bookings: recentBookings,
+      },
+      topSalonsByRevenue: [],
+      topSalonsByBookings: [],
+      bookingStatusDistribution: statusCounts,
+    };
+  },
+
+  // Verify setup password
+  async verifySetupPassword(_setupPassword: string): Promise<{ admins: Array<{ id: string; name: string; email: string }> }> {
+    const admins = await usersFs.getAll({
+      filters: [{ field: 'role', op: '==', value: 'ADMIN' }],
+    });
+    return {
+      admins: admins.map((a) => ({ id: a.id, name: a.name, email: a.email })),
+    };
   },
 
   // Reset admin password
-  async resetPassword(data: { email: string; newPassword: string; confirmPassword: string; setupPassword: string }): Promise<void> {
-    await apiCall('/admin/signup/reset-password', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async resetPassword(data: { email: string }): Promise<void> {
+    const { authService } = await import('./authService');
+    await authService.requestPasswordReset(data.email);
   },
 };

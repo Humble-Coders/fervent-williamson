@@ -1,4 +1,5 @@
-import { api } from './api';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '@/config/firebase';
 
 export interface UploadedFile {
   id: string;
@@ -11,124 +12,115 @@ export interface UploadedFile {
   uploadedAt: string;
 }
 
-export interface UploadResponse {
-  success: boolean;
-  data: UploadedFile;
-  message: string;
-}
-
-export interface MultipleUploadResponse {
-  success: boolean;
-  data: UploadedFile[];
-  message: string;
-}
-
 export const uploadService = {
   // Upload a single file
   async uploadFile(file: File, folder: string = 'general'): Promise<UploadedFile> {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', folder);
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const path = `${folder}/${timestamp}_${safeName}`;
+      const storageRef = ref(storage, path);
 
-      const response = await api.post<UploadResponse>('/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const snapshot = await uploadBytes(storageRef, file, {
+        contentType: file.type,
       });
 
-      return (response.data as any).data;
+      const url = await getDownloadURL(snapshot.ref);
+
+      return {
+        id: path,
+        filename: safeName,
+        originalName: file.name,
+        mimetype: file.type,
+        size: file.size,
+        url,
+        path,
+        uploadedAt: new Date().toISOString(),
+      };
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to upload file');
+      throw new Error(error.message || 'Failed to upload file');
     }
   },
 
   // Upload multiple files
   async uploadFiles(files: File[], folder: string = 'general'): Promise<UploadedFile[]> {
     try {
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('files', file);
-      });
-      formData.append('folder', folder);
-
-      const response = await api.post<MultipleUploadResponse>('/upload/multiple', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      return (response.data as any).data;
+      const results = await Promise.all(
+        files.map((file) => this.uploadFile(file, folder))
+      );
+      return results;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to upload files');
+      throw new Error(error.message || 'Failed to upload files');
     }
   },
 
   // Upload image with automatic optimization
-  async uploadImage(file: File, folder: string = 'images', maxWidth?: number, maxHeight?: number): Promise<UploadedFile> {
+  async uploadImage(file: File, folder: string = 'images'): Promise<UploadedFile> {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', folder);
-      if (maxWidth) formData.append('maxWidth', maxWidth.toString());
-      if (maxHeight) formData.append('maxHeight', maxHeight.toString());
-
-      const response = await api.post<UploadResponse>('/upload/image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      return (response.data as any).data;
+      // Optionally compress before upload
+      let fileToUpload = file;
+      if (file.size > 2 * 1024 * 1024) {
+        // Compress images over 2MB
+        fileToUpload = await this.compressImage(file);
+      }
+      return this.uploadFile(fileToUpload, folder);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to upload image');
+      throw new Error(error.message || 'Failed to upload image');
     }
   },
 
   // Delete uploaded file
-  async deleteFile(fileId: string): Promise<void> {
+  async deleteFile(filePath: string): Promise<void> {
     try {
-      await api.delete(`/upload/${fileId}`);
+      const storageRef = ref(storage, filePath);
+      await deleteObject(storageRef);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to delete file');
+      throw new Error(error.message || 'Failed to delete file');
     }
   },
 
-  // Get file info
-  async getFileInfo(fileId: string): Promise<UploadedFile> {
+  // Get file info (returns URL for a path)
+  async getFileInfo(filePath: string): Promise<UploadedFile> {
     try {
-      const response = await api.get<UploadResponse>(`/upload/${fileId}`);
-      return (response.data as any).data;
+      const storageRef = ref(storage, filePath);
+      const url = await getDownloadURL(storageRef);
+
+      return {
+        id: filePath,
+        filename: filePath.split('/').pop() || '',
+        originalName: filePath.split('/').pop() || '',
+        mimetype: 'application/octet-stream',
+        size: 0,
+        url,
+        path: filePath,
+        uploadedAt: '',
+      };
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to get file info');
+      throw new Error(error.message || 'Failed to get file info');
     }
   },
 
   // Validate file before upload
   validateFile(file: File, options: {
-    maxSize?: number; // in bytes
+    maxSize?: number;
     allowedTypes?: string[];
-    maxWidth?: number;
-    maxHeight?: number;
   } = {}): { isValid: boolean; error?: string } {
     const {
-      maxSize = 10 * 1024 * 1024, // 10MB default
+      maxSize = 10 * 1024 * 1024,
       allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
     } = options;
 
-    // Check file size
     if (file.size > maxSize) {
       return {
         isValid: false,
-        error: `File size must be less than ${this.formatFileSize(maxSize)}`
+        error: `File size must be less than ${this.formatFileSize(maxSize)}`,
       };
     }
 
-    // Check file type
     if (!allowedTypes.includes(file.type)) {
       return {
         isValid: false,
-        error: `File type must be one of: ${allowedTypes.join(', ')}`
+        error: `File type must be one of: ${allowedTypes.join(', ')}`,
       };
     }
 
@@ -138,11 +130,9 @@ export const uploadService = {
   // Format file size for display
   formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
-
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   },
 
@@ -174,9 +164,8 @@ export const uploadService = {
       const img = new Image();
 
       img.onload = () => {
-        // Calculate new dimensions
         let { width, height } = img;
-        
+
         if (width > height) {
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
@@ -191,10 +180,8 @@ export const uploadService = {
 
         canvas.width = width;
         canvas.height = height;
-
-        // Draw and compress
         ctx?.drawImage(img, 0, 0, width, height);
-        
+
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -217,10 +204,8 @@ export const uploadService = {
     });
   },
 
-  // Get upload progress (for future implementation with progress tracking)
+  // Upload progress placeholder
   onUploadProgress(callback: (progress: number) => void) {
-    // This would be implemented with axios upload progress
-    // For now, it's a placeholder
     return callback;
-  }
+  },
 };

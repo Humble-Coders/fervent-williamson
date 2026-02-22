@@ -1,6 +1,7 @@
-import { apiClient } from './api';
-import { logger } from '@/config/logger';
-import { env } from '../config/env';
+import { SubcollectionService } from './firestore/firestoreService';
+import { auth } from '@/config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 import { Service } from './serviceService';
 
 export interface Stylist {
@@ -47,92 +48,57 @@ export interface UpdateStylistData {
   isActive?: boolean;
 }
 
-class StylistService {
-  private baseUrl = `${env.API_URL}/salon/stylists`;
+const stylistsSubFs = new SubcollectionService<Stylist>('salons', 'stylists');
 
+/**
+ * Get the current user's salonId from their Firestore profile
+ */
+async function getOwnerSalonId(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  const salonId = userDoc.data()?.salonId;
+  if (!salonId) throw new Error('User does not own a salon');
+  return salonId;
+}
+
+class StylistService {
   async getStylists(): Promise<Stylist[]> {
-    try {
-      logger.info('🔄 Fetching stylists...');
-      const response = await apiClient.get(this.baseUrl);
-      logger.info('📋 Stylists loaded:', (response as any).data?.data || []);
-      return (response as any).data?.data || [];
-    } catch (error) {
-      logger.error('❌ Error fetching stylists:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.getAll(salonId);
   }
 
   async getStylist(id: string): Promise<Stylist> {
-    try {
-      logger.info('🔄 Fetching stylist:', id);
-      const response = await apiClient.get(`${this.baseUrl}/${id}`);
-      logger.info('👤 Stylist loaded:', (response as any).data?.data);
-      return (response as any).data?.data;
-    } catch (error) {
-      logger.error('❌ Error fetching stylist:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.getById(salonId, id);
   }
 
   async createStylist(data: CreateStylistData): Promise<Stylist> {
-    try {
-      logger.info('🔄 Creating stylist:', data);
-      const response = await apiClient.post(this.baseUrl, data);
-      logger.info('✅ Stylist created:', (response as any).data?.data);
-      return (response as any).data?.data;
-    } catch (error) {
-      logger.error('❌ Error creating stylist:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.create(salonId, { ...data, salonId, rating: 0, reviewCount: 0, isActive: data.isActive ?? true } as any);
   }
 
   async updateStylist(id: string, data: UpdateStylistData): Promise<Stylist> {
-    try {
-      logger.info('🔄 Updating stylist:', { id, data });
-      const response = await apiClient.put(`${this.baseUrl}/${id}`, data);
-      logger.info('✅ Stylist updated:', (response as any).data?.data);
-      return (response as any).data?.data;
-    } catch (error) {
-      logger.error('❌ Error updating stylist:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.update(salonId, id, data as any);
   }
 
   async deleteStylist(id: string): Promise<void> {
-    try {
-      logger.info('🔄 Deleting stylist:', id);
-      await apiClient.delete(`${this.baseUrl}/${id}`);
-      logger.info('✅ Stylist deleted');
-    } catch (error) {
-      logger.error('❌ Error deleting stylist:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.delete(salonId, id);
   }
 
   async toggleStylistStatus(id: string, isActive: boolean): Promise<Stylist> {
-    try {
-      logger.info('🔄 Toggling stylist status:', { id, isActive });
-      const response = await apiClient.patch(`${this.baseUrl}/${id}/status`, { isActive });
-      logger.info('✅ Stylist status updated:', (response as any).data?.data);
-      return (response as any).data?.data;
-    } catch (error) {
-      logger.error('❌ Error toggling stylist status:', error);
-      throw error;
-    }
+    const salonId = await getOwnerSalonId();
+    return stylistsSubFs.update(salonId, id, { isActive } as any);
   }
 }
 
 export const stylistService = new StylistService();
 
-// Helper function to get services for stylist assignment
+// Helper: get salon services for stylist assignment
 export const getSalonServices = async (): Promise<Service[]> => {
-  try {
-    logger.info('🔄 Fetching salon services for stylist assignment...');
-    const response = await apiClient.get(`${env.API_URL}/salon/services`);
-    logger.info('📋 Services loaded for stylist assignment:', (response as any).data?.data || []);
-    return (response as any).data?.data || [];
-  } catch (error) {
-    logger.error('❌ Error fetching salon services:', error);
-    throw error;
-  }
+  const salonId = await getOwnerSalonId();
+  const servicesSubFs = new SubcollectionService<Service>('salons', 'services');
+  return servicesSubFs.getAll(salonId);
 };
