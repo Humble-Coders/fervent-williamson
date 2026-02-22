@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { logger } from '@/config/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Check, Calendar, User, CreditCard, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Calendar, User, MapPin } from 'lucide-react';
 import { useBookingStore } from '../store/bookingStore';
 import { useAuthStore } from '../store/authStore';
 import useAuthPrompt from '../hooks/useAuthPrompt';
@@ -10,14 +10,12 @@ import ServiceConfirmation from '../components/booking/ServiceConfirmation';
 import ServiceCart from '../components/booking/ServiceCart';
 import StylistSelection from '../components/booking/StylistSelection';
 import DateTimePicker from '../components/booking/DateTimePicker';
-import PaymentSection from '../components/booking/PaymentSection';
 import BookingSummary from '../components/booking/BookingSummary';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import LoginModal from '../components/auth/LoginModal';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 
-import { paymentService } from '../services/paymentService';
 import { decodeServicesFromUrl } from '../utils/bookingUrlUtils';
 
 // Define all possible booking steps
@@ -42,13 +40,6 @@ const ALL_BOOKING_STEPS = [
     description: 'Pick your appointment slot',
     icon: Calendar,
     component: 'DateTimePicker'
-  },
-  {
-    id: 'payment',
-    title: 'Payment',
-    description: 'Choose payment method',
-    icon: CreditCard,
-    component: 'PaymentSection'
   },
   {
     id: 'review',
@@ -86,27 +77,23 @@ const BookingPage: React.FC = () => {
     selectedStylist,
     selectedDate,
     selectedTime,
-    selectedPaymentMethod,
     promoCode,
     discount,
     appliedOffer,
     couponValidationError,
     availableStylists,
     bookingConfig,
-    paymentConfig,
     isLoading,
     error,
     bookingId,
     setSelectedStylist,
     setSelectedDate,
     setSelectedTime,
-    setSelectedPaymentMethod,
     setPromoCode,
     confirmBooking,
     loadBookingData,
     loadBookingDataWithMultipleServices,
     loadBookingConfig,
-    loadPaymentConfig,
     applyPromoCode,
     autoApplyCoupon,
     removeService,
@@ -156,27 +143,6 @@ const BookingPage: React.FC = () => {
     }
   }, [searchParams]); // Intentionally not including loadBookingData to prevent duplicate calls
 
-  // Set default payment method to "cash" (Pay at Salon) when booking config loads
-  useEffect(() => {
-    if (bookingConfig && !selectedPaymentMethod) {
-      // Check if cash payment is available in config, otherwise use first available method
-      const cashMethod = bookingConfig.paymentMethods?.find(method => method.type === 'cash');
-      if (cashMethod) {
-        setSelectedPaymentMethod('cash');
-      } else if (bookingConfig.paymentMethods?.length > 0) {
-        setSelectedPaymentMethod(bookingConfig.paymentMethods[0].type);
-      } else {
-        // Fallback to cash if no payment methods configured
-        setSelectedPaymentMethod('cash');
-      }
-    }
-  }, [bookingConfig, selectedPaymentMethod, setSelectedPaymentMethod]);
-
-  // Load payment configuration on mount
-  useEffect(() => {
-    loadPaymentConfig();
-  }, [loadPaymentConfig]);
-
   // Reset booking when leaving page
   useEffect(() => {
     return () => {
@@ -198,8 +164,6 @@ const BookingPage: React.FC = () => {
         return !!selectedStylist;
       case 'DateTimePicker':
         return !!(selectedDate && selectedTime);
-      case 'PaymentSection':
-        return !!selectedPaymentMethod;
       case 'BookingSummary':
         return true; // Always valid for review step
       default:
@@ -257,7 +221,6 @@ const BookingPage: React.FC = () => {
       salon: selectedSalon?.name,
       date: selectedDate,
       time: selectedTime,
-      paymentMethod: selectedPaymentMethod
     });
 
     await confirmBooking();
@@ -269,73 +232,13 @@ const BookingPage: React.FC = () => {
 
     // Only proceed if booking was successful
     if (updatedBookingId && !updatedError) {
-      logger.info('Booking successful, checking payment configuration...');
-
-      // Check payment configuration to determine next step
-      if (paymentConfig?.skipPaymentDialog) {
-        // Payment is disabled or gateway is disabled - booking is already confirmed
-        logger.info('Payment disabled, redirecting to appointments...');
-        const params = new URLSearchParams({
-          message: 'Booking placed successfully! Your appointment is confirmed.',
-          bookingId: updatedBookingId
-        });
-        router.replace(`/appointments?${params.toString()}`);
-      } else if (paymentConfig?.directToRazorpay) {
-        // Payment required and gateway enabled - open Razorpay directly
-        logger.info('Opening Razorpay payment directly...');
-        handleDirectPayment(updatedBookingId);
-      } else {
-        // Default: redirect to appointments (no payment modal)
-        logger.info('Redirecting to appointments...');
-        const params = new URLSearchParams({
-          message: 'Booking placed successfully! Your appointment is confirmed.',
-          bookingId: updatedBookingId
-        });
-        router.replace(`/appointments?${params.toString()}`);
-      }
-    } else {
-      logger.info('Booking failed or no booking ID, staying on booking page');
+      const params = new URLSearchParams({
+        message: 'Booking placed successfully! Your appointment is confirmed.',
+        bookingId: updatedBookingId
+      });
+      router.replace(`/appointments?${params.toString()}`);
     }
     // If booking failed, the error will be displayed in the UI automatically
-    // No redirect should happen, user stays on booking page to see the error
-  };
-
-  // Handle direct Razorpay payment (bypass modal)
-  const handleDirectPayment = async (bookingId: string) => {
-    try {
-      const result = await paymentService.processPayment(bookingId, {
-        name: 'User', // You might want to get this from auth store
-        email: 'user@example.com', // You might want to get this from auth store
-        phone: '+91 9999999999', // You might want to get this from auth store
-      });
-
-      if (result.success && result.booking) {
-        handlePaymentSuccess(result.booking);
-      } else {
-        handlePaymentError(result.error || 'Payment failed');
-      }
-    } catch (error) {
-      handlePaymentError(error instanceof Error ? error.message : 'Payment failed');
-    }
-  };
-
-  // Payment handlers
-  const handlePaymentSuccess = (booking: any) => {
-    logger.info('Payment successful!', booking);
-
-    // Navigate to appointments page with success message
-    const params = new URLSearchParams({
-      message: 'Payment successful! Your appointment is confirmed.',
-      bookingId: booking.id
-    });
-    router.replace(`/appointments?${params.toString()}`);
-  };
-
-  const handlePaymentError = (error: string) => {
-    logger.error('Payment failed:', error);
-
-    // Show error message (you might want to use a toast notification here)
-    alert(`Payment failed: ${error}`);
   };
 
 
@@ -416,7 +319,6 @@ const BookingPage: React.FC = () => {
             service={selectedService}
             services={selectedServices}
             salon={selectedSalon}
-            enabledPaymentMethods={bookingConfig?.paymentMethods || []}
             onRemoveService={removeService}
             onUpdateQuantity={updateServiceQuantity}
           />
@@ -442,20 +344,6 @@ const BookingPage: React.FC = () => {
             bookingConfig={bookingConfig as any}
           />
         );
-      case 'PaymentSection':
-        return (
-          <PaymentSection
-            selectedPaymentMethod={selectedPaymentMethod}
-            onPaymentMethodSelect={setSelectedPaymentMethod}
-            promoCode={promoCode}
-            onPromoCodeChange={setPromoCode}
-            onApplyPromo={applyPromoCode}
-            discount={discount}
-            appliedOffer={appliedOffer}
-            couponValidationError={couponValidationError}
-            paymentMethods={bookingConfig?.paymentMethods || []}
-          />
-        );
       case 'BookingSummary':
         return (
           <BookingSummary
@@ -464,10 +352,9 @@ const BookingPage: React.FC = () => {
             stylist={selectedStylist || undefined}
             selectedDate={selectedDate}
             selectedTime={selectedTime}
-            paymentMethod={selectedPaymentMethod}
             discount={discount}
             onConfirmBooking={handleConfirmBooking}
-            onEditBooking={() => {}} // Not needed in multi-step
+            onEditBooking={() => {}}
             isLoading={isLoading}
           />
         );

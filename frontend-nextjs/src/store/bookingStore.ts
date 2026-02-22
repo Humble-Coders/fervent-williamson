@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import { logger } from '@/config/logger';
 import { devtools } from 'zustand/middleware';
-import { bookingService, CreateBookingData, PaymentConfig } from '../services/bookingService';
+import { bookingService, CreateBookingData } from '../services/bookingService';
 import { salonService } from '../services/salonService';
 import { offerService, Offer } from '../services/offerService';
-import { buildApiUrl } from '../config/env';
 
 interface SubService {
   id: string;
@@ -65,19 +64,7 @@ interface BookingConfig {
   maxBookingsPerDay: number;
   allowSameDayBooking: boolean;
   workingHours: any;
-  paymentMethods: PaymentMethodConfig[];
   timeSlots: string[];
-}
-
-interface PaymentMethodConfig {
-  id: string;
-  name: string;
-  type: string;
-  icon: string;
-  emoji: string;
-  description: string;
-  isActive: boolean;
-  sortOrder: number;
 }
 
 interface SelectedServiceItem {
@@ -96,7 +83,6 @@ interface BookingState {
   selectedStylist: Stylist | null; // Kept for backward compatibility
   selectedDate: string | null;
   selectedTime: string | null;
-  selectedPaymentMethod: string | null;
   promoCode: string;
   discount: number;
   appliedOffer: Offer | null;
@@ -105,8 +91,6 @@ interface BookingState {
   // Available data
   availableStylists: Stylist[];
   bookingConfig: BookingConfig | null;
-  paymentConfig: PaymentConfig | null;
-
   // UI state
   currentStep: number;
   isLoading: boolean;
@@ -128,7 +112,6 @@ interface BookingState {
   setSelectedStylist: (stylist: Stylist | null) => void;
   setSelectedDate: (date: string) => void;
   setSelectedTime: (time: string) => void;
-  setSelectedPaymentMethod: (method: string) => void;
   setPromoCode: (code: string) => void;
   setDiscount: (discount: number) => void;
   // New actions for multi-service
@@ -151,7 +134,6 @@ interface BookingState {
   loadBookingData: (salonId?: string, serviceId?: string, stylistId?: string, subServiceId?: string) => Promise<void>;
   loadBookingDataWithMultipleServices: (salonId: string, services: Array<{ serviceId: string; subServiceId?: string; quantity?: number }>) => Promise<void>;
   loadBookingConfig: (salonId: string) => Promise<void>;
-  loadPaymentConfig: () => Promise<void>;
   loadAvailableTimes: (salonId: string, serviceId: string, stylistId?: string, date?: string) => Promise<string[]>;
   applyPromoCode: () => Promise<void>;
   autoApplyCoupon: (couponCode: string) => Promise<void>;
@@ -168,14 +150,12 @@ export const useBookingStore = create<BookingState>()(
       selectedStylist: null,
       selectedDate: null,
       selectedTime: null,
-      selectedPaymentMethod: null,
       promoCode: '',
       discount: 0,
       appliedOffer: null,
       couponValidationError: null,
       availableStylists: [],
       bookingConfig: null,
-      paymentConfig: null,
       currentStep: 1,
       isLoading: false,
       error: null,
@@ -196,7 +176,6 @@ export const useBookingStore = create<BookingState>()(
       setSelectedStylist: (stylist) => set({ selectedStylist: stylist }),
       setSelectedDate: (date) => set({ selectedDate: date }),
       setSelectedTime: (time) => set({ selectedTime: time }),
-      setSelectedPaymentMethod: (method) => set({ selectedPaymentMethod: method }),
       setPromoCode: (code) => set({ promoCode: code }),
       setDiscount: (discount) => set({ discount }),
       setAppliedOffer: (offer) => set({ appliedOffer: offer }),
@@ -396,7 +375,7 @@ export const useBookingStore = create<BookingState>()(
 
           set({
             isLoading: false,
-            bookingConfirmed: false, // Don't confirm until payment is complete
+            bookingConfirmed: true,
             bookingId: booking.id,
             verificationCode: booking.verificationCode || null
           });
@@ -411,24 +390,14 @@ export const useBookingStore = create<BookingState>()(
         }
       },
 
-      // Confirm booking after successful payment
-      confirmPayment: (booking: any) => {
-        set({
-          bookingConfirmed: true,
-          isLoading: false,
-          error: null,
-        });
-      },
-
       resetBooking: () => set({
         selectedService: null,
         selectedSubService: null,
-        selectedServices: [], // Reset multi-service array
+        selectedServices: [],
         selectedSalon: null,
         selectedStylist: null,
         selectedDate: null,
         selectedTime: null,
-        selectedPaymentMethod: null,
         promoCode: '',
         discount: 0,
         appliedOffer: null,
@@ -446,7 +415,7 @@ export const useBookingStore = create<BookingState>()(
 
       clearError: () => set({ error: null }),
 
-      // Complete reset for logout (same as resetBooking but explicit)
+      // Complete reset for logout
       reset: () => set({
         selectedService: null,
         selectedSubService: null,
@@ -454,7 +423,6 @@ export const useBookingStore = create<BookingState>()(
         selectedStylist: null,
         selectedDate: null,
         selectedTime: null,
-        selectedPaymentMethod: null,
         promoCode: '',
         discount: 0,
         appliedOffer: null,
@@ -472,35 +440,42 @@ export const useBookingStore = create<BookingState>()(
 
       loadBookingConfig: async (salonId: string) => {
         try {
-          const response = await fetch(buildApiUrl(`booking-config/${salonId}`));
-          if (!response.ok) {
-            throw new Error('Failed to fetch booking configuration');
+          // Read booking config directly from the salon Firestore doc
+          const salon = await salonService.getSalonById(salonId);
+          const workingHours = salon.workingHours || {};
+
+          // Generate time slots from working hours
+          const timeSlots: string[] = [];
+          const slotDuration = salon.slotDuration || 30;
+          // Use Monday as reference for slot generation
+          const refDay = workingHours.monday;
+          if (refDay && !refDay.closed) {
+            const [openH, openM] = refDay.open.split(':').map(Number);
+            const [closeH, closeM] = refDay.close.split(':').map(Number);
+            for (let m = openH * 60 + openM; m < closeH * 60 + closeM; m += slotDuration) {
+              const h = Math.floor(m / 60);
+              const min = m % 60;
+              timeSlots.push(`${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`);
+            }
           }
-          const data = await response.json();
-          set({ bookingConfig: data.data });
+
+          const bookingConfig: BookingConfig = {
+            salon: { id: salon.id, displayId: salon.displayId, name: salon.name },
+            slotDuration,
+            breakDuration: salon.breakDuration || 0,
+            advanceBookingDays: salon.advanceBookingDays || 30,
+            minimumNoticeHours: salon.minimumNoticeHours || 1,
+            bufferTime: salon.bufferTime || 0,
+            maxBookingsPerDay: salon.maxBookingsPerDay || 50,
+            allowSameDayBooking: salon.allowSameDayBooking !== false,
+            workingHours,
+            timeSlots,
+          };
+
+          set({ bookingConfig });
         } catch (error) {
           logger.error('Error loading booking config:', error);
           set({ error: error instanceof Error ? error.message : 'Failed to load booking configuration' });
-        }
-      },
-
-      loadPaymentConfig: async () => {
-        try {
-          const paymentConfig = await bookingService.getPaymentConfig();
-          set({ paymentConfig });
-        } catch (error) {
-          logger.error('Error loading payment config:', error);
-          // Set default config on error
-          set({
-            paymentConfig: {
-              paymentRequired: true,
-              paymentGatewayEnabled: true,
-              paymentTimeoutMinutes: 15,
-              supportedPaymentMethods: ['razorpay', 'cash'],
-              skipPaymentDialog: false,
-              directToRazorpay: true,
-            }
-          });
         }
       },
 
