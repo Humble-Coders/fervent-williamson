@@ -97,19 +97,9 @@ class SimpleFrontendLogger {
     }
   }
 
-  private async sendToBackend(entry: LogEntry): Promise<void> {
-    // Send logs to backend API in production (non-blocking)
-    try {
-      await fetch('/api/v1/frontend-logs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(entry),
-      });
-    } catch (error) {
-      // Silently fail - don't log errors about logging
-    }
+  private async sendToBackend(_entry: LogEntry): Promise<void> {
+    // No backend to send logs to — Firebase-only architecture.
+    // Future: integrate with Cloud Logging or a third-party service.
   }
 
   error(message: string, metadata?: any): void {

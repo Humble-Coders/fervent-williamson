@@ -721,7 +721,6 @@ export interface AuthHookReturn {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  refreshToken: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }
 

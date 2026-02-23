@@ -255,21 +255,10 @@ class ErrorHandler {
     });
   }
 
-  private async reportError(errorInfo: ErrorInfo): Promise<void> {
+  private async reportError(_errorInfo: ErrorInfo): Promise<void> {
     if (!this.config.reportToService) return;
-
-    try {
-      // Send error to monitoring service (e.g., Sentry, LogRocket, etc.)
-      await fetch('/api/v1/errors', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(errorInfo),
-      });
-    } catch (reportingError) {
-      logger.warn('Failed to report error to monitoring service:', reportingError);
-    }
+    // No backend error reporting endpoint — Firebase-only architecture.
+    // Future: integrate with Sentry, LogRocket, or similar service.
   }
 
   public handleError(error: any, context?: any): void {

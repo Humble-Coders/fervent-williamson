@@ -224,11 +224,6 @@ Disallow: /booking/
 Disallow: /profile/
 Disallow: /api/
 
-# Allow specific public API endpoints
-Allow: /api/v1/salons
-Allow: /api/v1/services
-Allow: /api/v1/categories
-
 # Sitemap location
 Sitemap: ${baseUrl}/sitemap.xml
 
@@ -245,9 +240,7 @@ export const generateCompleteSitemap = async (): Promise<string> => {
     // For now, we'll use placeholder data structure
     const staticUrls = getStaticPageUrls();
     
-    // You would fetch actual data here:
-    // const salons = await fetch('/api/v1/salons').then(r => r.json());
-    // const services = await fetch('/api/v1/services').then(r => r.json());
+    // Future: fetch salons/services from Firestore for dynamic sitemap URLs
     
     const salonUrls: SitemapUrl[] = []; // getSalonUrls(salons.data || []);
     const serviceUrls: SitemapUrl[] = []; // getServiceUrls(services.data || []);
