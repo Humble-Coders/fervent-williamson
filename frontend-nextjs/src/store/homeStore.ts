@@ -246,7 +246,8 @@ export const useHomeStore = create<HomeState>()(
             return;
           }
 
-          const userBookings = await bookingService.getUserBookings();
+          const result = await bookingService.getUserBookings({ pageSize: 20 });
+          const userBookings = result.data;
 
           // Filter for upcoming appointments (not cancelled or completed)
           const upcomingBookings = userBookings.filter(booking =>

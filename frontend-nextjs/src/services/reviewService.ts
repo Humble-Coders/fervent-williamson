@@ -12,7 +12,7 @@ import {
   limit,
   startAfter,
 } from './firestore/firestoreService';
-import { docToObject, type QueryDocumentSnapshot } from './firestore/firestoreService';
+import { docToObject, type QueryDocumentSnapshot, type PaginatedResult } from './firestore/firestoreService';
 import { auth } from '@/config/firebase';
 
 export interface Review {
@@ -59,37 +59,48 @@ export interface ReviewsResponseData {
   };
   averageRating: number;
   totalReviews: number;
+  // Cursor-based pagination fields
+  lastDoc: QueryDocumentSnapshot | null;
+  hasMore: boolean;
 }
 
 const reviewsFs = new FirestoreService<Review>('reviews');
 
 export const reviewService = {
-  // Get reviews for a salon
-  async getReviewsBySalon(salonId: string, page: number = 1, pageSize: number = 10): Promise<ReviewsResponseData> {
+  // Get reviews for a salon (cursor-based pagination)
+  async getReviewsBySalon(
+    salonId: string,
+    pageOrOptions: number | { pageSize?: number; lastDoc?: QueryDocumentSnapshot | null } = 1,
+    pageSizeArg: number = 10
+  ): Promise<ReviewsResponseData> {
     try {
-      // Get total count
+      // Support both old (page, pageSize) and new ({ pageSize, lastDoc }) signatures
+      let pageSize: number;
+      let lastDocCursor: QueryDocumentSnapshot | null | undefined;
+
+      if (typeof pageOrOptions === 'object') {
+        pageSize = pageOrOptions.pageSize || 10;
+        lastDocCursor = pageOrOptions.lastDoc;
+      } else {
+        pageSize = pageSizeArg;
+        lastDocCursor = undefined; // No cursor for old-style calls
+      }
+
+      // Use cursor-based pagination via getPaginated
+      const result: PaginatedResult<Review & { id: string }> = await reviewsFs.getPaginated({
+        filters: [{ field: 'salonId', op: '==', value: salonId }],
+        sort: { field: 'createdAt', direction: 'desc' },
+        pageSize,
+        lastDoc: lastDocCursor,
+      });
+
+      // Get total count for display
       const totalReviews = await reviewsFs.count([
         { field: 'salonId', op: '==', value: salonId },
       ]);
 
-      // Get paginated reviews
-      const q = query(
-        collection(db, 'reviews'),
-        where('salonId', '==', salonId),
-        orderBy('createdAt', 'desc'),
-        limit(pageSize)
-      );
-      const snapshot = await getDocs(q);
-      const reviews = snapshot.docs.map((d) => docToObject<Review>(d));
-
-      // Calculate average rating
+      // Get salon's stored average rating
       let averageRating = 0;
-      if (reviews.length > 0) {
-        const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-        averageRating = totalRating / reviews.length;
-      }
-
-      // If there's a salon doc, use its stored average
       try {
         const salonDoc = await getDoc(doc(db, 'salons', salonId));
         if (salonDoc.exists()) {
@@ -97,19 +108,25 @@ export const reviewService = {
           if (salonData?.rating) averageRating = salonData.rating;
         }
       } catch {
-        // Use calculated average
+        // Calculate from fetched reviews
+        if (result.data.length > 0) {
+          const totalRating = result.data.reduce((sum, r) => sum + r.rating, 0);
+          averageRating = totalRating / result.data.length;
+        }
       }
 
       return {
-        reviews,
+        reviews: result.data,
         pagination: {
-          page,
+          page: typeof pageOrOptions === 'number' ? pageOrOptions : 1,
           limit: pageSize,
           total: totalReviews,
           pages: Math.ceil(totalReviews / pageSize),
         },
         averageRating,
         totalReviews,
+        lastDoc: result.lastDoc,
+        hasMore: result.hasMore,
       };
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch reviews');

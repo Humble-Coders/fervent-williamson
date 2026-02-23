@@ -92,7 +92,7 @@ class SalonDashboardService {
         where('date', '==', startOfDay)
       );
       const todayBookingsSnap = await getDocs(todayBookingsQuery);
-      const todayBookings = todayBookingsSnap.docs.map((d) => d.data());
+      const todayBookings = todayBookingsSnap.docs.map((d) => d.data() as Record<string, any>);
 
       // Calculate stats
       const todaysRevenue = todayBookings
@@ -158,7 +158,7 @@ class SalonDashboardService {
       }
 
       const bookingsSnap = await getDocs(bookingsQuery);
-      const bookings = bookingsSnap.docs.map((d) => d.data());
+      const bookings = bookingsSnap.docs.map((d) => d.data() as Record<string, any>);
 
       const totalBookings = bookings.length;
       const completedBookings = bookings.filter((b) => b.status === 'COMPLETED').length;

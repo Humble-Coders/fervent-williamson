@@ -4,6 +4,7 @@ import { devtools } from 'zustand/middleware';
 import { bookingService, CreateBookingData } from '../services/bookingService';
 import { salonService } from '../services/salonService';
 import { offerService, Offer } from '../services/offerService';
+import type { WorkingHours } from '../types';
 
 interface SubService {
   id: string;
@@ -442,7 +443,7 @@ export const useBookingStore = create<BookingState>()(
         try {
           // Read booking config directly from the salon Firestore doc
           const salon = await salonService.getSalonById(salonId);
-          const workingHours = salon.workingHours || {};
+          const workingHours: WorkingHours = salon.workingHours || {} as WorkingHours;
 
           // Generate time slots from working hours
           const timeSlots: string[] = [];

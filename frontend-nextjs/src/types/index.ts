@@ -156,6 +156,15 @@ export interface Salon {
   workingHours: WorkingHours;
   mapsLink?: string;
   ownerId?: string;
+  // Booking config fields (stored on salon doc in Firestore)
+  slotDuration?: number;
+  breakDuration?: number;
+  advanceBookingDays?: number;
+  minimumNoticeHours?: number;
+  bufferTime?: number;
+  maxBookingsPerDay?: number;
+  allowSameDayBooking?: boolean;
+  autoConfirmBookings?: boolean;
   createdAt: string;
   updatedAt: string;
 }

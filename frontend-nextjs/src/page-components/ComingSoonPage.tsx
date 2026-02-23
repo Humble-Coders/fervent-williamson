@@ -6,39 +6,15 @@ import { Heart, Users, Calendar, Gift, Mail, Phone, Sparkles, Star, Trophy, Crow
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { cn } from '@/utils/cn';
-import { env } from '@/config/env';
 
 // Generate a unique session ID for analytics
 const generateSessionId = () => {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// Analytics tracking helper
-const trackEvent = async (eventType: string, action?: string, metadata?: Record<string, unknown>) => {
-  try {
-    const sessionId = localStorage.getItem('cutq_session_id') || generateSessionId();
-    localStorage.setItem('cutq_session_id', sessionId);
-
-    await fetch(`${env.API_URL}/early-users/track`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        eventType,
-        action,
-        sessionId,
-        metadata: {
-          ...metadata,
-          timestamp: new Date().toISOString(),
-          viewport: `${window.innerWidth}x${window.innerHeight}`,
-          userAgent: navigator.userAgent
-        }
-      }),
-    });
-  } catch (error) {
-    logger.error('Analytics tracking failed:', error);
-  }
+// Analytics tracking helper (no-op: backend removed during Firebase migration)
+const trackEvent = async (_eventType: string, _action?: string, _metadata?: Record<string, unknown>) => {
+  // Tracking disabled — early-users API no longer exists
 };
 
 interface EarlyUser {
@@ -146,44 +122,7 @@ const ComingSoonPage: React.FC = () => {
 
     setIsSubmitting(true);
 
-    try {
-      // Try to call the backend API first
-      const response = await fetch(`${env.API_URL}/early-users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contact,
-          type: contactType
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setUserPosition(result.data.position);
-          setTotalUsers(result.data.totalUsers);
-          setIsSubmitted(true);
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 3000);
-
-          // Track successful signup
-          trackEvent('action', 'form_submit_success', {
-            contactType,
-            position: result.data.position,
-            totalUsers: result.data.totalUsers,
-            alreadyRegistered: result.data.alreadyRegistered
-          });
-
-          return;
-        }
-      }
-    } catch (error) {
-      logger.error('Backend not available, using demo mode:', error);
-    }
-
-    // Fallback to demo mode if backend is not available
+    // Demo mode — backend API no longer exists
     const newPosition = Math.floor(Math.random() * 100) + totalUsers;
     setUserPosition(newPosition);
     setTotalUsers(prev => prev + 1);

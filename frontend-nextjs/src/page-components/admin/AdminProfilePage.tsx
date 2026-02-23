@@ -19,6 +19,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { authService } from '../../services/authService';
+import { auth } from '@/config/firebase';
 
 interface AdminProfile {
   id: string;
@@ -60,8 +61,11 @@ const AdminProfilePage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const profileData = await authService.getProfile();
-      setProfile(profileData);
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Not authenticated');
+      const profileData = await authService.getCurrentUser(uid);
+      if (!profileData) throw new Error('Profile not found');
+      setProfile(profileData as any);
       setFormData({
         name: profileData.name || '',
         email: profileData.email || '',
@@ -97,7 +101,9 @@ const AdminProfilePage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      await authService.updateProfile(formData);
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Not authenticated');
+      await authService.updateProfile(uid, formData);
       setSuccess('Profile updated successfully!');
       setIsEditing(false);
       await fetchProfile(); // Refresh profile data
@@ -124,10 +130,10 @@ const AdminProfilePage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      await authService.changePassword({
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-      });
+      await authService.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword,
+      );
 
       setSuccess('Password changed successfully!');
       setShowPasswordModal(false);

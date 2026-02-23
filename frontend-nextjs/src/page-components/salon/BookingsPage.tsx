@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { logger } from '@/config/logger';
 import {
   Calendar,
@@ -14,50 +14,17 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { bookingService } from '../../services/bookingService';
-// import { useAuthStore } from '../../store/authStore'; // Removed unused import
+import { bookingService, Booking } from '../../services/bookingService';
+import type { QueryDocumentSnapshot } from '../../services/firestore/firestoreService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Button from '../../components/ui/Button';
 
-interface Booking {
-  id: string;
-  displayId: number;
-  date: string;
-  time: string;
-  status: 'PENDING' | 'PAYMENT_PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
-  totalPrice: number;
-  notes?: string;
-  userCode?: string;
-  verificationCode?: string;
-  userDisplayId?: number;
-  salonDisplayId?: number;
-  serviceDisplayId?: number;
-  stylistDisplayId?: number;
-  user: {
-    id: string;
-    displayId?: number;
-    name: string;
-    email: string;
-    phone?: string;
-  };
-  service: {
-    id: string;
-    displayId?: number;
-    name: string;
-    duration: number;
-    price: number;
-  };
-  stylist?: {
-    id: string;
-    displayId?: number;
-    name: string;
-  };
-}
-
 const BookingsPage: React.FC = () => {
-  // const { user } = useAuthStore(); // Removed unused variable
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const lastDocRef = useRef<QueryDocumentSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'completed' | 'cancelled'>('pending');
   const [confirmingBooking, setConfirmingBooking] = useState<string | null>(null);
@@ -73,10 +40,13 @@ const BookingsPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      lastDocRef.current = null;
 
-      const result = await bookingService.getSalonBookings();
+      const result = await bookingService.getSalonBookings({ pageSize: 50 });
       logger.info('Loaded salon bookings:', result);
       setBookings(result.data || []);
+      setHasMore(result.hasMore);
+      lastDocRef.current = result.lastDoc;
     } catch (err: unknown) {
       logger.error('Error loading bookings:', err);
       setError((err as Error).message);
@@ -84,6 +54,25 @@ const BookingsPage: React.FC = () => {
       setBookings(mockBookings);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreBookings = async () => {
+    if (loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+      const result = await bookingService.getSalonBookings({
+        pageSize: 50,
+        lastDoc: lastDocRef.current,
+      });
+      setBookings(prev => [...prev, ...result.data]);
+      setHasMore(result.hasMore);
+      lastDocRef.current = result.lastDoc;
+    } catch (err: unknown) {
+      logger.error('Error loading more bookings:', err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -266,6 +255,25 @@ const BookingsPage: React.FC = () => {
                 getStatusColor={getStatusColor}
               />
             ))}
+            {/* Load More */}
+            {hasMore && (
+              <div className="text-center pt-4">
+                <Button
+                  variant="outline"
+                  onClick={loadMoreBookings}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <LoadingSpinner size="sm" className="mr-2" />
+                      Loading...
+                    </>
+                  ) : (
+                    'Load More Bookings'
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -311,20 +319,20 @@ const BookingCard: React.FC<BookingCardProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2 mb-1">
-              <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{booking.user.name}</h3>
+              <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{booking.user?.name || 'Unknown'}</h3>
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0">
-                #{booking.displayId}
+                #{booking.id.slice(0, 6)}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 truncate">{booking.service.name}</p>
             <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1 overflow-hidden">
-              <span className="truncate">User #{booking.user.displayId}</span>
+              <span className="truncate">User #{booking.user?.id?.slice(0, 6)}</span>
               <span>•</span>
-              <span className="truncate">Service #{booking.service.displayId}</span>
+              <span className="truncate">Service: {booking.service.name}</span>
               {booking.stylist && (
                 <>
                   <span>•</span>
-                  <span className="truncate">Stylist #{booking.stylist.displayId}</span>
+                  <span className="truncate">Stylist: {booking.stylist.name}</span>
                 </>
               )}
             </div>
@@ -352,12 +360,12 @@ const BookingCard: React.FC<BookingCardProps> = ({
         </div>
         <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-600 sm:col-span-2">
           <Mail className="w-4 h-4 flex-shrink-0" />
-          <span className="truncate">{booking.user.email}</span>
+          <span className="truncate">{booking.user?.email}</span>
         </div>
-        {booking.user.phone && (
+        {booking.user?.phone && (
           <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-600 sm:col-span-2">
             <Phone className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{booking.user.phone}</span>
+            <span className="truncate">{booking.user?.phone}</span>
           </div>
         )}
       </div>
@@ -464,61 +472,70 @@ const BookingCard: React.FC<BookingCardProps> = ({
 // Mock data for demo
 const mockBookings: Booking[] = [
   {
-    id: '1',
-    displayId: 1001,
+    id: 'mock1',
+    userId: 'user1',
+    salonId: 'salon1',
+    serviceId: 'service1',
     date: '2025-01-10',
     time: '10:00',
+    duration: 60,
     status: 'PENDING',
     totalPrice: 50,
     notes: 'First time customer',
-    userDisplayId: 1,
-    salonDisplayId: 1,
-    serviceDisplayId: 1,
+    discount: 0,
+    rescheduleCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    salon: { id: 'salon1', name: 'Demo Salon', address: '123 Main St', phone: '+1234567890', images: [] },
     user: {
       id: 'user1',
-      displayId: 1,
       name: 'John Doe',
       email: 'john@example.com',
       phone: '+1234567890',
     },
     service: {
       id: 'service1',
-      displayId: 1,
       name: 'Haircut & Style',
+      description: 'Classic haircut with styling',
       duration: 60,
       price: 50,
+      category: 'Hair',
     },
   },
   {
-    id: '2',
-    displayId: 1002,
+    id: 'mock2',
+    userId: 'user2',
+    salonId: 'salon1',
+    serviceId: 'service2',
     date: '2025-01-10',
     time: '14:00',
+    duration: 120,
     status: 'CONFIRMED',
     totalPrice: 75,
     userCode: '123456',
-    userDisplayId: 2,
-    salonDisplayId: 1,
-    serviceDisplayId: 2,
-    stylistDisplayId: 1,
+    discount: 0,
+    rescheduleCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    salon: { id: 'salon1', name: 'Demo Salon', address: '123 Main St', phone: '+1234567890', images: [] },
     user: {
       id: 'user2',
-      displayId: 2,
       name: 'Jane Smith',
       email: 'jane@example.com',
       phone: '+1234567891',
     },
     service: {
       id: 'service2',
-      displayId: 2,
       name: 'Color & Cut',
+      description: 'Full color treatment with cut',
       duration: 120,
       price: 75,
+      category: 'Hair',
     },
     stylist: {
       id: 'stylist1',
-      displayId: 1,
       name: 'Sarah Johnson',
+      specialties: ['Coloring', 'Cutting'],
     },
   },
 ];

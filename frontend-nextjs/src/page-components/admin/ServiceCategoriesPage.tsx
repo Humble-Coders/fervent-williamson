@@ -251,7 +251,6 @@ const ServiceCategoriesPage: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <Button
-          <Button
             onClick={() => setShowCreateModal(true)}
             icon={<Plus />}
           >

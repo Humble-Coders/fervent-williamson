@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -439,6 +440,7 @@ export {
   runTransaction,
   serverTimestamp,
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,

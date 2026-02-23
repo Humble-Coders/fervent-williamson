@@ -1,5 +1,5 @@
 // Form-specific type definitions
-import type { UserRole, PaymentMethodType, OfferType } from './index';
+import type { UserRole, OfferType } from './index';
 
 // ============================================================================
 // AUTHENTICATION FORMS
@@ -126,10 +126,7 @@ export interface SalonBookingConfigFormData {
   bufferTime: number;
   maxBookingsPerDay: number;
   allowSameDayBooking: boolean;
-  enabledPaymentMethods: PaymentMethodType[];
   autoConfirmBookings: boolean;
-  requireDeposit: boolean;
-  depositAmount?: number;
   cancellationPolicy: string;
   reschedulePolicy: string;
 }
@@ -232,49 +229,6 @@ export interface ReviewFormData {
     staff: number;
     value: number;
     ambiance: number;
-  };
-}
-
-// ============================================================================
-// PAYMENT FORMS
-// ============================================================================
-
-export interface PaymentFormData {
-  bookingId: string;
-  amount: number;
-  method: PaymentMethodType;
-  paymentMethodId?: string;
-  savePaymentMethod: boolean;
-  billingAddress?: {
-    name: string;
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
-}
-
-export interface PaymentMethodFormData {
-  type: PaymentMethodType;
-  name: string;
-  isDefault: boolean;
-  details: {
-    // Card details
-    cardNumber?: string;
-    expiryMonth?: string;
-    expiryYear?: string;
-    cvv?: string;
-    cardholderName?: string;
-    
-    // Bank details
-    accountNumber?: string;
-    routingNumber?: string;
-    accountType?: 'checking' | 'savings';
-    
-    // Wallet details
-    walletId?: string;
-    walletProvider?: string;
   };
 }
 

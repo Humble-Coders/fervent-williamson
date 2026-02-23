@@ -1,11 +1,12 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { logger } from '@/config/logger';
 import { Search, Plus, Edit, Trash2, Shield, User, Scissors, RefreshCw, AlertCircle } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { adminService, AdminUser, UsersResponse } from '../../services/adminService';
+import type { QueryDocumentSnapshot } from '../../services/firestore/firestoreService';
 
 const UsersPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,39 +14,66 @@ const UsersPage: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 0,
-  });
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const lastDocRef = useRef<QueryDocumentSnapshot | null>(null);
 
-  // Fetch users from API
+  // Fetch users on filter changes (resets list)
   useEffect(() => {
     fetchUsers();
-  }, [searchTerm, selectedRole, selectedStatus, pagination.page]);
+  }, [searchTerm, selectedRole, selectedStatus]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
+      lastDocRef.current = null; // Reset cursor
 
       const response = await adminService.getUsers({
-        page: pagination.page,
-        limit: pagination.limit,
+        pageSize: 20,
         search: searchTerm || undefined,
         role: selectedRole !== 'all' ? selectedRole : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
       });
 
       setUsers(response.users);
-      setPagination(response.pagination);
+      setHasMore(response.hasMore);
+      setTotal(response.pagination.total);
+      lastDocRef.current = response.lastDoc;
     } catch (err: any) {
       setError(err.message || 'Failed to fetch users');
       logger.error('Error fetching users:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreUsers = async () => {
+    if (loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+      setError(null);
+
+      const response = await adminService.getUsers({
+        pageSize: 20,
+        lastDoc: lastDocRef.current,
+        search: searchTerm || undefined,
+        role: selectedRole !== 'all' ? selectedRole : undefined,
+        status: selectedStatus !== 'all' ? selectedStatus : undefined,
+      });
+
+      setUsers(prev => [...prev, ...response.users]);
+      setHasMore(response.hasMore);
+      setTotal(response.pagination.total);
+      lastDocRef.current = response.lastDoc;
+    } catch (err: any) {
+      setError(err.message || 'Failed to load more users');
+      logger.error('Error loading more users:', err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -73,17 +101,14 @@ const UsersPage: React.FC = () => {
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
   };
 
   const handleRoleChange = (role: string) => {
     setSelectedRole(role);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
   };
 
   const handleStatusChange = (status: string) => {
     setSelectedStatus(status);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
   };
 
   const getRoleIcon = (role: string) => {
@@ -285,69 +310,30 @@ const UsersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Pagination */}
+      {/* Load More */}
       {!loading && users.length > 0 && (
-        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-lg shadow mt-6">
-          <div className="flex-1 flex justify-between sm:hidden">
+        <div className="bg-white px-4 py-4 rounded-lg shadow mt-6 text-center">
+          <p className="text-sm text-gray-700 mb-3">
+            Showing <span className="font-medium">{users.length}</span> of{' '}
+            <span className="font-medium">{total}</span> users
+          </p>
+          {hasMore && (
             <Button
               variant="outline"
-              onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-              disabled={pagination.page === 1}
+              onClick={loadMoreUsers}
+              disabled={loadingMore}
+              className="mx-auto"
             >
-              Previous
+              {loadingMore ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Loading...
+                </>
+              ) : (
+                'Load More'
+              )}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setPagination(prev => ({ ...prev, page: Math.min(pagination.pages, prev.page + 1) }))}
-              disabled={pagination.page === pagination.pages}
-            >
-              Next
-            </Button>
-          </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
-                <span className="font-medium">
-                  {Math.min(pagination.page * pagination.limit, pagination.total)}
-                </span>{' '}
-                of <span className="font-medium">{pagination.total}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <Button
-                  variant="outline"
-                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                  disabled={pagination.page === 1}
-                  className="rounded-l-md"
-                >
-                  Previous
-                </Button>
-                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                  const page = i + 1;
-                  return (
-                    <Button
-                      key={page}
-                      variant={pagination.page === page ? "primary" : "outline"}
-                      onClick={() => setPagination(prev => ({ ...prev, page }))}
-                      className="rounded-none"
-                    >
-                      {page}
-                    </Button>
-                  );
-                })}
-                <Button
-                  variant="outline"
-                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(pagination.pages, prev.page + 1) }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="rounded-r-md"
-                >
-                  Next
-                </Button>
-              </nav>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

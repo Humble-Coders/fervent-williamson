@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { logger } from '@/config/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -18,9 +18,10 @@ import {
   X,
   Copy
 } from 'lucide-react';
-import Link from 'next/link'; // import Link from 'next/link'; import Link from 'next/link'; // import { Link, , useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '../store/authStore';
 import { bookingService, Booking } from '../services/bookingService';
+import type { QueryDocumentSnapshot } from '../services/firestore/firestoreService';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import RescheduleModal from '../components/booking/RescheduleModal';
 
@@ -34,6 +35,9 @@ const AppointmentsPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [appointments, setAppointments] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const lastDocRef = useRef<QueryDocumentSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rescheduleModal, setRescheduleModal] = useState<{
     isOpen: boolean;
@@ -41,7 +45,7 @@ const AppointmentsPage: React.FC = () => {
   }>({ isOpen: false, booking: null });
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Load appointments from API
+  // Load appointments from API (cursor-based)
   const loadAppointments = async () => {
     if (!isAuthenticated || !user) {
       setLoading(false);
@@ -51,13 +55,36 @@ const AppointmentsPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const userBookings = await bookingService.getUserBookings();
-      setAppointments(userBookings);
+      lastDocRef.current = null;
+      const result = await bookingService.getUserBookings({ pageSize: 20 });
+      setAppointments(result.data);
+      setHasMore(result.hasMore);
+      lastDocRef.current = result.lastDoc;
     } catch (err: unknown) {
       logger.error('Error loading appointments:', err);
       setError((err as Error).message || 'Failed to load appointments');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load more appointments
+  const loadMoreAppointments = async () => {
+    if (loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+      const result = await bookingService.getUserBookings({
+        pageSize: 20,
+        lastDoc: lastDocRef.current,
+      });
+      setAppointments(prev => [...prev, ...result.data]);
+      setHasMore(result.hasMore);
+      lastDocRef.current = result.lastDoc;
+    } catch (err: unknown) {
+      logger.error('Error loading more appointments:', err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -388,12 +415,11 @@ const AppointmentsPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredAppointments.map((appointment, index) => (
+                  {filteredAppointments.map((appointment) => (
                     <div
                       key={appointment.id}
                       id={`appointment-${appointment.id}`}
-                      className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-slide-up transition-all duration-300"
-                      style={{ animationDelay: `${index * 100}ms` }}
+                      className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 transition-all duration-300"
                     >
                       {/* Appointment Header */}
                       <div className="flex items-start gap-4 mb-4">
@@ -524,6 +550,25 @@ const AppointmentsPage: React.FC = () => {
                       )}
                     </div>
                   ))}
+                  {/* Load More Button */}
+                  {hasMore && (
+                    <div className="text-center pt-4">
+                      <button
+                        onClick={loadMoreAppointments}
+                        disabled={loadingMore}
+                        className="px-6 py-3 bg-white text-purple-600 border-2 border-purple-200 rounded-xl font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
+                      >
+                        {loadingMore ? (
+                          <span className="flex items-center gap-2">
+                            <LoadingSpinner size="sm" />
+                            Loading...
+                          </span>
+                        ) : (
+                          'Load More Appointments'
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -12,7 +12,7 @@ import {
   orderBy,
   getDoc,
 } from './firestore/firestoreService';
-import { docToObject } from './firestore/firestoreService';
+import { docToObject, type QueryDocumentSnapshot, type PaginatedResult } from './firestore/firestoreService';
 import { auth } from '@/config/firebase';
 import { logger } from '@/config/logger';
 
@@ -94,19 +94,27 @@ export interface Booking {
 const bookingsFs = new FirestoreService<Booking>('bookings');
 
 export const bookingService = {
-  // Get current user's bookings
-  async getUserBookings(): Promise<Booking[]> {
+  // Get current user's bookings (cursor-based pagination)
+  async getUserBookings(options?: {
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot | null;
+  }): Promise<{ data: Booking[]; lastDoc: QueryDocumentSnapshot | null; hasMore: boolean }> {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
-      const q = query(
-        collection(db, 'bookings'),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map((d) => docToObject<Booking>(d));
+      const result = await bookingsFs.getPaginated({
+        filters: [{ field: 'userId', op: '==', value: user.uid }],
+        sort: { field: 'createdAt', direction: 'desc' },
+        pageSize: options?.pageSize || 20,
+        lastDoc: options?.lastDoc,
+      });
+
+      return {
+        data: result.data,
+        lastDoc: result.lastDoc,
+        hasMore: result.hasMore,
+      };
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch bookings');
     }
@@ -204,8 +212,11 @@ export const bookingService = {
     }
   },
 
-  // Get salon's bookings (for salon owners)
-  async getSalonBookings(): Promise<{ data: Booking[] }> {
+  // Get salon's bookings (for salon owners, cursor-based pagination)
+  async getSalonBookings(options?: {
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot | null;
+  }): Promise<{ data: Booking[]; lastDoc: QueryDocumentSnapshot | null; hasMore: boolean }> {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
@@ -215,14 +226,18 @@ export const bookingService = {
       const salonId = userDoc.data()?.salonId;
       if (!salonId) throw new Error('User does not own a salon');
 
-      const q = query(
-        collection(db, 'bookings'),
-        where('salonId', '==', salonId),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map((d) => docToObject<Booking>(d));
-      return { data };
+      const result = await bookingsFs.getPaginated({
+        filters: [{ field: 'salonId', op: '==', value: salonId }],
+        sort: { field: 'createdAt', direction: 'desc' },
+        pageSize: options?.pageSize || 50,
+        lastDoc: options?.lastDoc,
+      });
+
+      return {
+        data: result.data,
+        lastDoc: result.lastDoc,
+        hasMore: result.hasMore,
+      };
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch salon bookings');
     }
@@ -361,11 +376,22 @@ export const bookingService = {
     return selectedDate >= today;
   },
 
-  // Get salon customers from booking data
+  // Get salon customers from booking data (fetches all bookings via pagination)
   async getSalonCustomers(): Promise<any[]> {
     try {
-      const bookingsResponse = await this.getSalonBookings();
-      const bookings = bookingsResponse.data || [];
+      // Fetch all bookings by paginating through
+      let allBookings: Booking[] = [];
+      let lastDoc: QueryDocumentSnapshot | null = null;
+      let hasMore = true;
+
+      while (hasMore) {
+        const result = await this.getSalonBookings({ pageSize: 100, lastDoc });
+        allBookings = [...allBookings, ...result.data];
+        lastDoc = result.lastDoc;
+        hasMore = result.hasMore;
+      }
+
+      const bookings = allBookings;
 
       if (!bookings || bookings.length === 0) return [];
 

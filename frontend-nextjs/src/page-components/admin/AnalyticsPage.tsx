@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { adminService } from '../../services/adminService';
+import { adminService, AdminStats } from '../../services/adminService';
 import { logger } from '@/config/logger';
 import { BarChart3, Users, Store, Calendar, TrendingUp } from 'lucide-react';
 import Card from '../../components/ui/Card';
@@ -26,7 +26,17 @@ const AdminAnalyticsPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await adminService.getStats();
-      setStats(data);
+      // Map AdminStats to DashboardStats
+      const statusMap: Record<string, number> = {};
+      data.bookingStatusDistribution.forEach(({ status, count }) => {
+        statusMap[status] = count;
+      });
+      setStats({
+        totalUsers: data.overview.totalUsers,
+        activeSalons: data.overview.activeSalons,
+        totalBookings: data.overview.totalBookings,
+        bookingsByStatus: statusMap,
+      });
     } catch (err: any) {
       logger.error('Failed to load analytics:', err);
       setError(err.message || 'Failed to load analytics data');

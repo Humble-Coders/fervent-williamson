@@ -54,8 +54,8 @@ const WriteReviewPage: React.FC = () => {
 
       try {
         setLoading(true);
-        const bookings = await bookingService.getUserBookings();
-        const salonBookings = bookings.filter(
+        const result = await bookingService.getUserBookings({ pageSize: 100 });
+        const salonBookings = result.data.filter(
           booking => booking.salon.id === salonId && booking.status === 'COMPLETED'
         );
         setUserBookings(salonBookings);

@@ -35,28 +35,25 @@ const SalonLoginPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await authService.login({ email: formData.email, password: formData.password });
+      const user = await authService.login({ email: formData.email, password: formData.password });
 
-      const { user, token } = response;
-        
         // Check if user is salon owner
         if (user.role !== 'SALON_OWNER') {
           setError('Access denied. This login is for salon owners only.');
+          await authService.logout();
           setLoading(false);
           return;
         }
-
-        // Store auth data (token is already stored by authService)
-        localStorage.setItem('user_data', JSON.stringify(user));
 
         // Redirect to salon dashboard
         router.push('/salon');
     } catch (error: unknown) {
       logger.error('Login error:', error);
-      if ((error as any).response?.data?.message) {
-        setError((error as any).response.data.message);
-      } else if ((error as any).response?.status === 401) {
+      const errMsg = (error as Error).message;
+      if (errMsg.includes('auth/invalid-credential') || errMsg.includes('auth/wrong-password')) {
         setError('Invalid email or password');
+      } else if (errMsg.includes('auth/user-not-found')) {
+        setError('No account found with this email');
       } else {
         setError('Login failed. Please try again.');
       }

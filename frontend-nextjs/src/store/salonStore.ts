@@ -4,6 +4,7 @@ import { salonService } from '../services/salonService';
 import { reviewService } from '../services/reviewService';
 import type { Salon as APISalon } from '../types';
 import type { Review as APIReview } from '../services/reviewService';
+import type { QueryDocumentSnapshot } from '../services/firestore/firestoreService';
 import { extractErrorMessage } from '../utils/errorHandler';
 import { getAbsoluteImageUrl, getAbsoluteImageUrls } from '../utils/imageUtils';
 
@@ -119,7 +120,7 @@ interface SalonState {
   error: string | null;
   showReviewModal: boolean;
 
-  // Review pagination
+  // Review pagination (cursor-based)
   reviewsLoading: boolean;
   reviewsPagination: {
     page: number;
@@ -127,6 +128,7 @@ interface SalonState {
     total: number;
     pages: number;
     hasMore: boolean;
+    lastDoc: QueryDocumentSnapshot | null;
   };
 
   // Actions
@@ -160,6 +162,7 @@ export const useSalonStore = create<SalonState>()(
         total: 0,
         pages: 0,
         hasMore: false,
+        lastDoc: null,
       },
 
       // Actions
@@ -171,16 +174,18 @@ export const useSalonStore = create<SalonState>()(
       setShowReviewModal: (show) => set({ showReviewModal: show }),
 
       loadSalonData: async (salonId) => {
-        set({ loading: true, error: null, reviewsPagination: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false } });
+        set({ loading: true, error: null, reviewsPagination: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false, lastDoc: null } });
         try {
           // Fetch real salon and reviews data from APIs
           const [apiSalon, reviewsData] = await Promise.all([
             salonService.getSalonById(salonId),
-            reviewService.getReviewsBySalon(salonId, 1, 10).catch(() => ({
+            reviewService.getReviewsBySalon(salonId, { pageSize: 10 }).catch(() => ({
               reviews: [],
               averageRating: 0,
               totalReviews: 0,
-              pagination: { page: 1, limit: 10, total: 0, pages: 0 }
+              pagination: { page: 1, limit: 10, total: 0, pages: 0 },
+              lastDoc: null,
+              hasMore: false,
             }))
           ]);
 
@@ -289,9 +294,8 @@ export const useSalonStore = create<SalonState>()(
           // Use transformed reviews from API, don't fall back to mock data
           const finalReviews = transformedReviews;
 
-          // Set pagination data
+          // Set pagination data (cursor-based)
           const pagination = reviewsData.pagination || { page: 1, limit: 10, total: finalReviews.length, pages: 1 };
-          const hasMore = pagination.page < pagination.pages;
 
           set({
             currentSalon: transformedSalon,
@@ -299,7 +303,8 @@ export const useSalonStore = create<SalonState>()(
             reviews: finalReviews,
             reviewsPagination: {
               ...pagination,
-              hasMore,
+              hasMore: reviewsData.hasMore ?? (pagination.page < pagination.pages),
+              lastDoc: reviewsData.lastDoc ?? null,
             },
             loading: false
           });
@@ -317,8 +322,11 @@ export const useSalonStore = create<SalonState>()(
 
         set({ reviewsLoading: true });
         try {
-          const nextPage = reviewsPagination.page + 1;
-          const reviewsData = await reviewService.getReviewsBySalon(currentSalon.id, nextPage, reviewsPagination.limit);
+          // Use cursor-based pagination with lastDoc
+          const reviewsData = await reviewService.getReviewsBySalon(currentSalon.id, {
+            pageSize: reviewsPagination.limit,
+            lastDoc: reviewsPagination.lastDoc,
+          });
 
           // Transform API reviews data
           const transformedReviews: Review[] = (reviewsData.reviews || []).map((review: APIReview) => ({
@@ -341,13 +349,12 @@ export const useSalonStore = create<SalonState>()(
             booking: review.booking,
           }));
 
-          const hasMore = reviewsData.pagination.page < reviewsData.pagination.pages;
-
           set({
             reviews: [...reviews, ...transformedReviews],
             reviewsPagination: {
               ...reviewsData.pagination,
-              hasMore,
+              hasMore: reviewsData.hasMore,
+              lastDoc: reviewsData.lastDoc,
             },
             reviewsLoading: false,
           });
@@ -433,6 +440,7 @@ export const useSalonStore = create<SalonState>()(
             total: 0,
             pages: 0,
             hasMore: false,
+            lastDoc: null,
           },
         });
       },

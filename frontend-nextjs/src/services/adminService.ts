@@ -11,7 +11,7 @@ import {
   doc,
   getDoc,
 } from './firestore/firestoreService';
-import { docToObject } from './firestore/firestoreService';
+import { docToObject, type QueryDocumentSnapshot } from './firestore/firestoreService';
 
 export interface AdminUser {
   id: string;
@@ -55,6 +55,9 @@ export interface UsersResponse {
     total: number;
     pages: number;
   };
+  // Cursor-based pagination fields
+  lastDoc: QueryDocumentSnapshot | null;
+  hasMore: boolean;
 }
 
 export interface UpdateUserData {
@@ -112,49 +115,76 @@ export interface AdminStats {
 const usersFs = new FirestoreService<AdminUser>('users');
 
 export const adminService = {
-  // Get all users with pagination and filters
+  // Get all users with cursor-based pagination and filters
   async getUsers(params?: {
     page?: number;
     limit?: number;
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot | null;
     search?: string;
     role?: string;
     status?: string;
   }): Promise<UsersResponse> {
-    const pageSize = params?.limit || 20;
+    const pageSize = params?.pageSize || params?.limit || 20;
 
     const filters: { field: string; op: any; value: any }[] = [];
     if (params?.role) filters.push({ field: 'role', op: '==', value: params.role });
     if (params?.status === 'active') filters.push({ field: 'isActive', op: '==', value: true });
     if (params?.status === 'inactive') filters.push({ field: 'isActive', op: '==', value: false });
 
-    let users = await usersFs.getAll({
-      filters,
-      sort: { field: 'createdAt', direction: 'desc' },
-    });
-
-    // Client-side search filter
+    // When search is active, fetch all and filter client-side (Firestore doesn't support text search)
     if (params?.search) {
+      let users = await usersFs.getAll({
+        filters,
+        sort: { field: 'createdAt', direction: 'desc' },
+      });
+
       const searchLower = params.search.toLowerCase();
       users = users.filter(
         (u) =>
           u.name?.toLowerCase().includes(searchLower) ||
           u.email?.toLowerCase().includes(searchLower)
       );
+
+      const total = users.length;
+      const page = params?.page || 1;
+      const start = (page - 1) * pageSize;
+      const paginatedUsers = users.slice(start, start + pageSize);
+
+      return {
+        users: paginatedUsers,
+        pagination: {
+          page,
+          limit: pageSize,
+          total,
+          pages: Math.ceil(total / pageSize),
+        },
+        lastDoc: null, // No cursor for search results
+        hasMore: start + pageSize < total,
+      };
     }
 
-    const total = users.length;
-    const page = params?.page || 1;
-    const start = (page - 1) * pageSize;
-    const paginatedUsers = users.slice(start, start + pageSize);
+    // Cursor-based pagination (no search)
+    const result = await usersFs.getPaginated({
+      filters,
+      sort: { field: 'createdAt', direction: 'desc' },
+      pageSize,
+      lastDoc: params?.lastDoc,
+    });
+
+    // Get total count for display
+    const total = await usersFs.count(filters);
 
     return {
-      users: paginatedUsers,
+      users: result.data,
       pagination: {
-        page,
+        page: params?.page || 1,
         limit: pageSize,
         total,
         pages: Math.ceil(total / pageSize),
       },
+      lastDoc: result.lastDoc,
+      hasMore: result.hasMore,
     };
   },
 

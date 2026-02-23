@@ -23,7 +23,7 @@ export interface BookingSummaryProps {
   };
   selectedDate: string | null;
   selectedTime: string | null;
-  paymentMethod: string | null;
+  paymentMethod?: string | null;
   discount: number;
   onConfirmBooking: () => void;
   onEditBooking: () => void;
@@ -60,7 +60,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
     cash: 'Pay at Salon 💰'
   };
 
-  const isComplete = selectedDate && selectedTime && paymentMethod;
+  const isComplete = selectedDate && selectedTime;
 
   const handleConfirmClick = () => {
     if (isAuthenticated) {
