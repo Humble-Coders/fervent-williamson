@@ -10,46 +10,15 @@ export * from './uploadService';
 export * from './adminService';
 export * from './configService';
 
-// Enhanced service utilities
+// Service utilities
 export const serviceUtils = {
   /**
-   * Handle API errors consistently
+   * Extract error message from Firebase/generic errors
    */
-  handleApiError: (error: any): string => {
-    if (error.response?.data?.message) {
-      return error.response.data.message;
-    }
-    if (error.message) {
-      return error.message;
-    }
+  handleError: (error: any): string => {
+    if (error.code) return error.message || error.code;
+    if (error.message) return error.message;
     return 'An unexpected error occurred';
-  },
-
-  /**
-   * Format API response for consistent handling
-   */
-  formatResponse: <T>(response: any): T => {
-    if (response.data) {
-      return response.data;
-    }
-    return response;
-  },
-
-  /**
-   * Create query string from parameters
-   */
-  createQueryString: (params: Record<string, any>): string => {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        if (Array.isArray(value)) {
-          value.forEach(item => searchParams.append(key, String(item)));
-        } else {
-          searchParams.append(key, String(value));
-        }
-      }
-    });
-    return searchParams.toString();
   },
 
   /**
@@ -67,7 +36,7 @@ export const serviceUtils = {
   },
 
   /**
-   * Retry function for failed API calls
+   * Retry function for failed operations
    */
   retry: async <T>(
     fn: () => Promise<T>,
@@ -85,18 +54,3 @@ export const serviceUtils = {
     }
   },
 };
-
-// Backward compatibility exports
-export const handleApiError = serviceUtils.handleApiError;
-
-export const createApiResponse = <T>(data: T, message?: string) => ({
-  success: true,
-  data,
-  message: message || 'Operation successful',
-});
-
-export const createApiError = (message: string, status = 500) => ({
-  success: false,
-  message,
-  status,
-});

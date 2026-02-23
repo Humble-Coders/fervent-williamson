@@ -1,0 +1,163 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================
+    // Helper functions
+    // ========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('ADMIN');
+    }
+
+    function isSalonOwner() {
+      return hasRole('SALON_OWNER');
+    }
+
+    function ownsSalon(salonId) {
+      return isSalonOwner() && getUserData().salonId == salonId;
+    }
+
+    // ========================================
+    // Users collection
+    // ========================================
+    match /users/{userId} {
+      // Users can read their own profile; admins can read any
+      allow read: if isOwner(userId) || isAdmin();
+      // Users can update their own profile; admins can update any
+      allow update: if isOwner(userId) || isAdmin();
+      // Only the auth trigger / admin can create user docs
+      allow create: if isOwner(userId) || isAdmin();
+      // Only admins can delete user docs
+      allow delete: if isAdmin();
+    }
+
+    // ========================================
+    // Salons collection
+    // ========================================
+    match /salons/{salonId} {
+      // Public read for all salons
+      allow read: if true;
+      // Salon owners can update their own salon; admins can update any
+      allow update: if ownsSalon(salonId) || isAdmin();
+      // Only admins can create or delete salons
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+
+      // Services subcollection
+      match /services/{serviceId} {
+        allow read: if true;
+        allow write: if ownsSalon(salonId) || isAdmin();
+      }
+
+      // Sub-services subcollection
+      match /services/{serviceId}/subServices/{subServiceId} {
+        allow read: if true;
+        allow write: if ownsSalon(salonId) || isAdmin();
+      }
+
+      // Stylists subcollection
+      match /stylists/{stylistId} {
+        allow read: if true;
+        allow write: if ownsSalon(salonId) || isAdmin();
+      }
+
+      // Service categories subcollection
+      match /serviceCategories/{categoryId} {
+        allow read: if true;
+        allow write: if ownsSalon(salonId) || isAdmin();
+      }
+    }
+
+    // ========================================
+    // Bookings collection
+    // ========================================
+    match /bookings/{bookingId} {
+      // Users can read their own bookings; salon owners can read their salon's bookings; admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        ownsSalon(resource.data.salonId) ||
+        isAdmin()
+      );
+      // Authenticated users can create bookings
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update their own; salon owners can update their salon's; admins can update any
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        ownsSalon(resource.data.salonId) ||
+        isAdmin()
+      );
+      // Only admins can delete bookings
+      allow delete: if isAdmin();
+
+      // Booking items subcollection
+      match /items/{itemId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+          isAdmin()
+        );
+        allow write: if isAuthenticated();
+      }
+    }
+
+    // ========================================
+    // Reviews collection
+    // ========================================
+    match /reviews/{reviewId} {
+      // Public read for all reviews
+      allow read: if true;
+      // Authenticated users can create reviews
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update their own reviews
+      allow update: if isOwner(resource.data.userId);
+      // Users can delete their own; admins can delete any
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // ========================================
+    // Favorites collection
+    // ========================================
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ========================================
+    // Offers collection
+    // ========================================
+    match /offers/{offerId} {
+      // Public read for active offers
+      allow read: if true;
+      // Salon owners can manage their salon's offers; admins can manage any
+      allow write: if isSalonOwner() || isAdmin();
+    }
+
+    // ========================================
+    // Config collection (system configuration)
+    // ========================================
+    match /config/{configId} {
+      // Public read for system config
+      allow read: if true;
+      // Only admins can write config
+      allow write: if isAdmin();
+    }
+  }
+}

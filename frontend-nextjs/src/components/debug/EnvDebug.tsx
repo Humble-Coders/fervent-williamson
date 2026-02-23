@@ -1,10 +1,10 @@
 import React from 'react';
 
 const EnvDebug: React.FC = () => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const mode = process.env.NODE_ENV;
   const dev = process.env.NODE_ENV === 'development';
   const prod = process.env.NODE_ENV === 'production';
+  const firebaseProject = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
   return (
     <div style={{
@@ -20,11 +20,11 @@ const EnvDebug: React.FC = () => {
       maxWidth: '300px'
     }}>
       <h4 style={{ margin: '0 0 5px 0' }}>Environment Debug</h4>
-      <div><strong>NEXT_PUBLIC_API_URL:</strong> {apiUrl || 'undefined'}</div>
+      <div><strong>Firebase Project:</strong> {firebaseProject || 'undefined'}</div>
       <div><strong>MODE:</strong> {mode}</div>
       <div><strong>DEV:</strong> {dev ? 'true' : 'false'}</div>
       <div><strong>PROD:</strong> {prod ? 'true' : 'false'}</div>
-      <div><strong>Window location:</strong> {window.location.origin}</div>
+      <div><strong>Window location:</strong> {typeof window !== 'undefined' ? window.location.origin : 'SSR'}</div>
     </div>
   );
 };
