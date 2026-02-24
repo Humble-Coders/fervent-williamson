@@ -8,6 +8,7 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Alert from '../components/ui/Alert';
 import { authService } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/errorHandler';
 import { UserRole } from '../types';
 import {
   isValidEmail,
@@ -116,7 +117,7 @@ const AdminSignupPage: React.FC = () => {
       }, 2000);
     } catch (error) {
       logger.error('Admin signup error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create admin user');
+      setError(getAuthErrorMessage(error));
     } finally {
       setLoading(false);
     }

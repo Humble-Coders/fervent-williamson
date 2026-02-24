@@ -12,6 +12,7 @@ import { isValidEmail, VALIDATION_MESSAGES } from '../utils/validation';
 
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/errorHandler';
 import { UserRole } from '../types';
 
 type AuthStep = 'method' | 'login' | 'register' | 'forgot-password';
@@ -101,7 +102,7 @@ const OnboardingPage: React.FC = () => {
       await authService.login({ email: emailValue, password: passwordValue });
       // onAuthStateChanged will handle the redirect
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Login failed');
+      setAuthError(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +133,7 @@ const OnboardingPage: React.FC = () => {
       } as any);
       // onAuthStateChanged will handle the redirect
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Registration failed');
+      setAuthError(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -151,7 +152,7 @@ const OnboardingPage: React.FC = () => {
       await authService.requestPasswordReset(emailValue);
       setSuccessMessage('Password reset email sent. Check your inbox.');
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Failed to send reset email');
+      setAuthError(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }

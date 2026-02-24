@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { logger } from '@/config/logger';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/errorHandler';
 import { User, UserRole, LoginCredentials, RegisterData } from '../types';
 
 export const useAuth = () => {
@@ -28,7 +29,7 @@ export const useAuth = () => {
       setUser(loggedInUser);
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      const errorMessage = getAuthErrorMessage(error);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
@@ -45,7 +46,7 @@ export const useAuth = () => {
       setUser(newUser);
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      const errorMessage = getAuthErrorMessage(error);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {

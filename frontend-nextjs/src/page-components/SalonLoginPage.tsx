@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import { authService } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/errorHandler';
 
 const SalonLoginPage: React.FC = () => {
   const router = useRouter();
@@ -49,14 +50,7 @@ const SalonLoginPage: React.FC = () => {
         router.push('/salon');
     } catch (error: unknown) {
       logger.error('Login error:', error);
-      const errMsg = (error as Error).message;
-      if (errMsg.includes('auth/invalid-credential') || errMsg.includes('auth/wrong-password')) {
-        setError('Invalid email or password');
-      } else if (errMsg.includes('auth/user-not-found')) {
-        setError('No account found with this email');
-      } else {
-        setError('Login failed. Please try again.');
-      }
+      setError(getAuthErrorMessage(error));
     } finally {
       setLoading(false);
     }

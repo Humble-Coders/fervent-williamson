@@ -208,17 +208,17 @@ class ErrorHandler {
     const code = errorInfo.code;
     const technicalMessage = errorInfo.message;
 
-    // Firebase error code mappings
+    // Firebase error code mappings (generic, user-readable)
     const firebaseMessageMap: Record<string, string> = {
-      // Auth
-      'auth/invalid-credential': 'Invalid email or password. Please try again.',
-      'auth/wrong-password': 'Incorrect password. Please try again.',
-      'auth/user-not-found': 'No account found with this email.',
+      // Auth - login/signup (generic so we don't leak whether user exists)
+      'auth/invalid-credential': 'Wrong email or password.',
+      'auth/wrong-password': 'Wrong email or password.',
+      'auth/user-not-found': 'Wrong email or password.',
       'auth/email-already-in-use': 'An account with this email already exists.',
-      'auth/weak-password': 'Password is too weak. Please use at least 6 characters.',
+      'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
       'auth/invalid-email': 'Please enter a valid email address.',
       'auth/too-many-requests': 'Too many attempts. Please try again later.',
-      'auth/network-request-failed': 'Network error. Please check your connection.',
+      'auth/network-request-failed': 'Connection error. Please check your internet and try again.',
       // Firestore
       'permission-denied': 'You do not have permission to perform this action.',
       'not-found': 'The requested item was not found.',
@@ -314,34 +314,62 @@ export const handleApiError = (error: any) => errorHandler.handleApiError(error)
 export const handleValidationError = (errors: Record<string, string[]>) => errorHandler.handleValidationError(errors);
 
 /**
+ * User-readable messages for login/signup. Keeps errors generic (e.g. don't reveal if user exists).
+ */
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  // Login: same message for wrong password, user not found, invalid credential (security)
+  'auth/invalid-credential': 'Wrong email or password.',
+  'auth/wrong-password': 'Wrong email or password.',
+  'auth/user-not-found': 'Wrong email or password.',
+  // Sign up
+  'auth/email-already-in-use': 'An account with this email already exists.',
+  'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
+  'auth/invalid-email': 'Please enter a valid email address.',
+  // Rate limit & network
+  'auth/too-many-requests': 'Too many attempts. Please try again later.',
+  'auth/network-request-failed': 'Connection error. Please check your internet and try again.',
+  'auth/operation-not-allowed': 'Sign-in method is not enabled.',
+  'auth/disabled-account': 'This account has been disabled.',
+};
+
+/**
+ * Get a generic, user-readable message for login/signup errors.
+ * Use this in login and registration flows so we don't leak technical or security details.
+ */
+export const getAuthErrorMessage = (error: any): string => {
+  const code = error?.code;
+  if (code && AUTH_ERROR_MESSAGES[code]) return AUTH_ERROR_MESSAGES[code];
+  const msg = typeof error?.message === 'string' ? error.message : '';
+  if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) return 'Wrong email or password.';
+  if (msg.includes('auth/email-already-in-use')) return 'An account with this email already exists.';
+  if (msg.includes('auth/weak-password')) return 'Password is too weak. Use at least 6 characters.';
+  if (msg.includes('auth/invalid-email')) return 'Please enter a valid email address.';
+  if (msg.includes('auth/too-many-requests')) return 'Too many attempts. Please try again later.';
+  if (msg.includes('User profile not found')) return 'Unable to sign in. Please try again.';
+  if (msg.includes('Network')) return 'Connection error. Please check your internet and try again.';
+  return 'Something went wrong. Please try again.';
+};
+
+/**
  * Extract user-friendly error message from a Firebase or generic error
  */
 export const extractErrorMessage = (error: any): string => {
   logger.error('Extracting error message from:', error);
 
-  // Firebase error codes
-  const code = error.code;
-  if (code) {
-    const firebaseMessages: Record<string, string> = {
-      'auth/invalid-credential': 'Invalid email or password',
-      'auth/wrong-password': 'Incorrect password',
-      'auth/user-not-found': 'No account found with this email',
-      'auth/email-already-in-use': 'Email already exists',
-      'auth/weak-password': 'Password is too weak',
-      'auth/invalid-email': 'Invalid email address',
-      'auth/too-many-requests': 'Too many attempts. Try again later',
-      'permission-denied': 'Permission denied',
-      'not-found': 'Item not found',
-      'already-exists': 'Item already exists',
-      'unavailable': 'Service temporarily unavailable',
-    };
-    if (firebaseMessages[code]) return firebaseMessages[code];
-  }
+  const code = error?.code;
+  if (code && AUTH_ERROR_MESSAGES[code]) return AUTH_ERROR_MESSAGES[code];
 
-  // Standard error message
-  if (error.message) return error.message;
+  const genericMap: Record<string, string> = {
+    'permission-denied': 'You don\'t have permission to do that.',
+    'not-found': 'Item not found.',
+    'already-exists': 'This already exists.',
+    'unavailable': 'Service temporarily unavailable. Please try again.',
+  };
+  if (code && genericMap[code]) return genericMap[code];
 
-  return 'An unexpected error occurred';
+  if (error?.message) return error.message;
+
+  return 'An unexpected error occurred.';
 };
 export const handleNetworkError = () => errorHandler.handleError(new Error('Network Error'), { type: ErrorType.NETWORK });
 
