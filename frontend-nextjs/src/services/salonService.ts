@@ -222,7 +222,14 @@ class SalonServiceClass {
     return salonsFs.getAll();
   }
 
+  /**
+   * Get salon by ID. Accepts either Firestore document ID (UUID) or displayId (numeric from URL).
+   */
   async getSalonById(id: string): Promise<Salon> {
+    const numericId = /^\d+$/.test(id) ? parseInt(id, 10) : NaN;
+    if (!Number.isNaN(numericId)) {
+      return this.getByDisplayId(numericId);
+    }
     return salonsFs.getById(id);
   }
 

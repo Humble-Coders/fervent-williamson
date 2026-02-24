@@ -115,16 +115,11 @@ const FeaturedSalons: React.FC<FeaturedSalonsProps> = ({
     handleLoginCancel,
   } = useAuthPrompt();
 
-  // Check if salon self-signup is enabled
+  // Check if salon self-signup is enabled (default false if config missing)
   useEffect(() => {
     const checkSalonSignupConfig = async () => {
-      try {
-        const config = await configService.getConfig('salon_self_signup_enabled');
-        const isEnabled = config.value === 'true';
-        setSalonSelfSignupEnabled(isEnabled);
-      } catch (error) {
-        logger.error('Error checking salon signup config:', error);
-      }
+      const config = await configService.getConfigOptional('salon_self_signup_enabled');
+      setSalonSelfSignupEnabled(config?.value === 'true');
     };
 
     checkSalonSignupConfig();

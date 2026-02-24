@@ -139,7 +139,7 @@ cd cutq
 ```bash
 cd backend
 npm install
-cp .env.example .env
+cp .env.local .env
 # Edit .env with your configuration
 npm run db:generate
 npm run db:push
@@ -151,7 +151,7 @@ npm run dev
 ```bash
 cd frontend
 npm install
-cp .env.example .env
+cp .env.local .env
 # Edit .env with your configuration
 npm run dev
 ```

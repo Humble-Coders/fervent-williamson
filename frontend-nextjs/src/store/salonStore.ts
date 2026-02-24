@@ -176,17 +176,20 @@ export const useSalonStore = create<SalonState>()(
       loadSalonData: async (salonId) => {
         set({ loading: true, error: null, reviewsPagination: { page: 1, limit: 10, total: 0, pages: 0, hasMore: false, lastDoc: null } });
         try {
-          // Fetch real salon and reviews data from APIs
-          const [apiSalon, reviewsData] = await Promise.all([
-            salonService.getSalonById(salonId),
-            reviewService.getReviewsBySalon(salonId, { pageSize: 10 }).catch(() => ({
+          // Resolve salon first (supports both Firestore doc id and displayId from URL)
+          const apiSalon = await salonService.getSalonById(salonId);
+          // Fetch services and stylists from subcollections (Firestore doc read does not include subcollections)
+          const [servicesList, stylistsList, reviewsData] = await Promise.all([
+            salonService.getServices(apiSalon.id),
+            salonService.getStylists(apiSalon.id),
+            reviewService.getReviewsBySalon(apiSalon.id, { pageSize: 10 }).catch(() => ({
               reviews: [],
               averageRating: 0,
               totalReviews: 0,
               pagination: { page: 1, limit: 10, total: 0, pages: 0 },
               lastDoc: null,
               hasMore: false,
-            }))
+            })),
           ]);
 
           // Transform API salon data to match our interface
@@ -219,17 +222,17 @@ export const useSalonStore = create<SalonState>()(
             advanceBookingDays: (apiSalon as any).advanceBookingDays,
             minimumNoticeHours: (apiSalon as any).minimumNoticeHours,
             // Computed fields
-            teamSize: (apiSalon as any).stylists?.length || 0,
+            teamSize: stylistsList.length,
             yearsInBusiness: Math.floor((new Date().getTime() - new Date((apiSalon as any).createdAt || '2020-01-01').getTime()) / (1000 * 60 * 60 * 24 * 365)) || 1,
             certifications: (apiSalon as any).certifications || [],
-            // Store API relations
-            services: (apiSalon as any).services,
-            stylists: (apiSalon as any).stylists,
+            // Store API relations (from subcollections)
+            services: servicesList as any,
+            stylists: stylistsList as any,
             owner: (apiSalon as any).owner,
           };
 
-          // Transform API services data
-          const transformedServices: Service[] = ((apiSalon as any).services || []).map((service: any) => ({
+          // Transform API services data (from services subcollection)
+          const transformedServices: Service[] = (servicesList || []).map((service: any) => ({
             id: service.id,
             displayId: service.displayId, // Include displayId for user-friendly URLs
             name: service.name,
@@ -239,7 +242,7 @@ export const useSalonStore = create<SalonState>()(
             category: service.category?.name || 'General',
             categoryId: service.categoryId,
             categoryEmoji: service.category?.emoji || '✨', // Include category emoji
-            salonId: service.salonId,
+            salonId: service.salonId || apiSalon.id,
             isActive: service.isActive,
             emoji: service.emoji || service.category?.emoji || '✨', // Use service emoji or fallback to category emoji
             images: service.images || [], // Include service images

@@ -34,7 +34,7 @@ class ConfigService {
     }
   }
 
-  // Get a specific configuration by key
+  // Get a specific configuration by key (throws if not found)
   async getConfig(key: string): Promise<SystemConfig> {
     try {
       const docSnap = await getDoc(doc(db, 'config', key));
@@ -46,6 +46,19 @@ class ConfigService {
     } catch (error) {
       logger.error(`Error fetching configuration ${key}:`, error);
       throw error;
+    }
+  }
+
+  // Get a configuration by key, or null if not found (does not throw)
+  async getConfigOptional(key: string): Promise<SystemConfig | null> {
+    try {
+      const docSnap = await getDoc(doc(db, 'config', key));
+      if (!docSnap.exists()) return null;
+      const data = docSnap.data();
+      return { id: docSnap.id, key: docSnap.id, ...data } as SystemConfig;
+    } catch (error) {
+      logger.error(`Error fetching configuration ${key}:`, error);
+      return null;
     }
   }
 

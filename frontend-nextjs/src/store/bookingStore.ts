@@ -499,8 +499,13 @@ export const useBookingStore = create<BookingState>()(
           // Load booking configuration first (this includes salon basic info)
           await get().loadBookingConfig(salonId);
 
-          // Fetch detailed salon data from backend (supports both UUID and displayId)
+          // Fetch detailed salon data (supports both UUID and displayId)
           const salonData = await salonService.getSalonById(salonId);
+          // Load services and stylists from subcollections (not included in salon doc)
+          const [servicesList, stylistsList] = await Promise.all([
+            salonService.getServices(salonData.id),
+            salonService.getStylists(salonData.id),
+          ]);
 
           // Transform salon data
           const salon: Salon = {
@@ -518,8 +523,8 @@ export const useBookingStore = create<BookingState>()(
           let selectedService: Service | null = null;
           let selectedSubService: SubService | null = null;
 
-          if (serviceId && (salonData as any).services) {
-            const foundService = (salonData as any).services.find((s: any) =>
+          if (serviceId && servicesList.length > 0) {
+            const foundService = servicesList.find((s: any) =>
               s.id === serviceId || s.displayId?.toString() === serviceId
             );
             if (foundService) {
@@ -558,8 +563,8 @@ export const useBookingStore = create<BookingState>()(
             }
           }
 
-          // Transform stylists data
-          const availableStylists: Stylist[] = ((salonData as any).stylists || []).map((stylist: any) => ({
+          // Transform stylists data (from subcollection)
+          const availableStylists: Stylist[] = (stylistsList || []).map((stylist: any) => ({
             id: stylist.id,
             displayId: stylist.displayId, // Include displayId for user-friendly URLs
             name: stylist.name,
@@ -603,8 +608,12 @@ export const useBookingStore = create<BookingState>()(
           // Load booking configuration first
           await get().loadBookingConfig(salonId);
 
-          // Fetch detailed salon data
+          // Fetch salon and its services/stylists (services are in subcollection)
           const salonData = await salonService.getSalonById(salonId);
+          const [servicesList, stylistsList] = await Promise.all([
+            salonService.getServices(salonData.id),
+            salonService.getStylists(salonData.id),
+          ]);
 
           // Transform salon data
           const salon: Salon = {
@@ -618,8 +627,8 @@ export const useBookingStore = create<BookingState>()(
             image: salonData.images?.[0] || 'https://images.pexels.com/photos/3993449/pexels-photo-3993449.jpeg?auto=compress&cs=tinysrgb&w=800'
           };
 
-          // Transform stylists data
-          const availableStylists: Stylist[] = ((salonData as any).stylists || []).map((stylist: any) => ({
+          // Transform stylists data (from subcollection)
+          const availableStylists: Stylist[] = (stylistsList || []).map((stylist: any) => ({
             id: stylist.id,
             displayId: stylist.displayId,
             name: stylist.name,
@@ -634,8 +643,8 @@ export const useBookingStore = create<BookingState>()(
           const selectedServiceItems: SelectedServiceItem[] = [];
 
           for (const item of services) {
-            // Find service by ID or displayId
-            const foundService = (salonData as any).services?.find((s: any) =>
+            // Find service by ID or displayId (from services subcollection)
+            const foundService = servicesList.find((s: any) =>
               s.id === item.serviceId || s.displayId?.toString() === item.serviceId
             );
 

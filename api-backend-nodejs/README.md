@@ -79,7 +79,7 @@ backend/
 npm install
 
 # Copy environment file
-cp .env.example .env
+cp .env.local .env
 
 # Edit .env with your configuration
 nano .env

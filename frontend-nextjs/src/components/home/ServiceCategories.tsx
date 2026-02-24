@@ -1,9 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { logger } from '@/config/logger';
+import React from 'react';
 import { Star, Users, TrendingUp, Package, LucideIcon } from 'lucide-react';
 import Card from '../ui/Card';
-// import EmptyState from '../ui/EmptyState'; // Removed unused import
-import { adminService } from '../../services/adminService';
 
 interface ServiceCategory {
   id: string;
@@ -23,33 +20,6 @@ const ServiceCategories: React.FC<ServiceCategoriesProps> = ({
   categories,
   onCategoryClick,
 }) => {
-  const [stats, setStats] = useState({
-    totalSalons: 0,
-    totalUsers: 0,
-    totalBookings: 0,
-    totalStylists: 0,
-  });
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await adminService.getStats();
-        if (data.overview) {
-          setStats({
-            totalSalons: data.overview.totalSalons || 0,
-            totalUsers: data.overview.totalUsers || 0,
-            totalBookings: data.overview.totalBookings || 0,
-            totalStylists: Math.floor((data.overview.totalUsers || 0) * 0.3), // Estimate stylists as 30% of users
-          });
-        }
-      } catch (error) {
-        logger.error('Error fetching stats:', error);
-        // Keep default values on error
-      }
-    };
-
-    fetchStats();
-  }, []);
   return (
     <section className="py-8 md:py-16">
       <div className="container-custom px-4">
