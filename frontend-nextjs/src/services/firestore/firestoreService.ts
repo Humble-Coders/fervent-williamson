@@ -33,6 +33,17 @@ import { db } from '@/config/firebase';
 // UTILITIES
 // ============================================================================
 
+/** Remove undefined values; Firestore does not accept undefined. */
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const out = { ...obj } as T;
+  for (const key of Object.keys(out) as (keyof T)[]) {
+    if (out[key] === undefined) {
+      delete out[key];
+    }
+  }
+  return out;
+}
+
 /**
  * Convert a Firestore document snapshot to a plain object with id
  */
@@ -189,11 +200,11 @@ export class FirestoreService<T extends { id?: string }> {
    * Create a new document (auto-generated ID)
    */
   async create(data: Omit<T, 'id'>): Promise<T & { id: string }> {
-    const docData = {
+    const docData = stripUndefined({
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    } as Record<string, any>) as DocumentData;
     const docRef = await addDoc(this.collectionRef, docData);
     const newDoc = await getDoc(docRef);
     return docToObject<T>(newDoc);
@@ -203,11 +214,11 @@ export class FirestoreService<T extends { id?: string }> {
    * Create a document with a specific ID
    */
   async createWithId(id: string, data: Omit<T, 'id'>): Promise<T & { id: string }> {
-    const docData = {
+    const docData = stripUndefined({
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    } as Record<string, any>) as DocumentData;
     const ref = this.docRef(id);
     await setDoc(ref, docData);
     const newDoc = await getDoc(ref);
@@ -219,10 +230,11 @@ export class FirestoreService<T extends { id?: string }> {
    */
   async update(id: string, data: Partial<T>): Promise<T & { id: string }> {
     const ref = this.docRef(id);
-    await updateDoc(ref, {
+    const docData = stripUndefined({
       ...data,
       updatedAt: serverTimestamp(),
-    } as DocumentData);
+    } as Record<string, any>) as DocumentData;
+    await updateDoc(ref, docData);
     const updatedDoc = await getDoc(ref);
     return docToObject<T>(updatedDoc);
   }
@@ -369,11 +381,11 @@ export class SubcollectionService<T extends { id?: string }> {
    * Create a new document in the subcollection (auto-generated ID)
    */
   async create(parentId: string, data: Omit<T, 'id'>): Promise<T & { id: string }> {
-    const docData = {
+    const docData = stripUndefined({
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    } as Record<string, any>) as DocumentData;
     const docRef = await addDoc(this.getCollectionRef(parentId), docData);
     const newDoc = await getDoc(docRef);
     return docToObject<T>(newDoc);
@@ -383,11 +395,11 @@ export class SubcollectionService<T extends { id?: string }> {
    * Create a document with a specific ID
    */
   async createWithId(parentId: string, docId: string, data: Omit<T, 'id'>): Promise<T & { id: string }> {
-    const docData = {
+    const docData = stripUndefined({
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    } as Record<string, any>) as DocumentData;
     const ref = this.getDocRef(parentId, docId);
     await setDoc(ref, docData);
     const newDoc = await getDoc(ref);
@@ -399,10 +411,11 @@ export class SubcollectionService<T extends { id?: string }> {
    */
   async update(parentId: string, docId: string, data: Partial<T>): Promise<T & { id: string }> {
     const ref = this.getDocRef(parentId, docId);
-    await updateDoc(ref, {
+    const docData = stripUndefined({
       ...data,
       updatedAt: serverTimestamp(),
-    } as DocumentData);
+    } as Record<string, any>) as DocumentData;
+    await updateDoc(ref, docData);
     const updatedDoc = await getDoc(ref);
     return docToObject<T>(updatedDoc);
   }

@@ -16,6 +16,9 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+/** Firestore database ID: always "default" (asia-south1). Do not use "(default)" / nam5. */
+const FIRESTORE_DATABASE_ID = 'default';
+export const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 export const storage = getStorage(app);
 export default app;

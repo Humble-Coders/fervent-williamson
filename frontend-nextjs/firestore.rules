@@ -159,5 +159,21 @@ service cloud.firestore {
       // Only admins can write config
       allow write: if isAdmin();
     }
+
+    // ========================================
+    // Root-level service categories (global catalog for dropdowns etc.)
+    // ========================================
+    match /serviceCategories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ========================================
+    // Collection group: services (for cross-salon queries)
+    // ========================================
+    match /{path=**}/services/{serviceId} {
+      allow read: if true;
+      allow write: if false; // write still governed by salons/{salonId}/services rule
+    }
   }
 }

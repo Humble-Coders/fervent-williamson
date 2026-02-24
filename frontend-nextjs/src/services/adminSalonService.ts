@@ -4,6 +4,11 @@ import {
   db,
   doc,
   getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  limit,
 } from './firestore/firestoreService';
 import { logger } from '@/config/logger';
 import {
@@ -21,6 +26,25 @@ export type { WorkingHours, SalonService as Service, Stylist, CreateSalonData };
 const salonsFs = new FirestoreService<Salon>('salons');
 const servicesSubFs = new SubcollectionService<SalonService>('salons', 'services');
 const stylistsSubFs = new SubcollectionService<Stylist>('salons', 'stylists');
+
+/**
+ * Look up salon owner from users collection (role=SALON_OWNER, salonId=salon.id)
+ */
+async function getSalonOwner(salonId: string): Promise<{ name: string; email: string } | null> {
+  const q = query(
+    collection(db, 'users'),
+    where('salonId', '==', salonId),
+    where('role', '==', 'SALON_OWNER'),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const data = snapshot.docs[0].data();
+  return {
+    name: data.name || 'Unknown',
+    email: data.email || '',
+  };
+}
 
 /**
  * Admin salon service using Firestore
@@ -80,14 +104,16 @@ class AdminSalonServiceClass {
     const enriched: SalonWithRelations[] = await Promise.all(
       salons.map(async (salon) => {
         try {
-          const [services, stylists] = await Promise.all([
+          const [services, stylists, owner] = await Promise.all([
             servicesSubFs.getAll(salon.id),
             stylistsSubFs.getAll(salon.id),
+            getSalonOwner(salon.id),
           ]);
           return {
             ...salon,
             services,
             stylists,
+            owner: owner ?? undefined,
             _count: {
               services: services.length,
               stylists: stylists.length,
@@ -98,6 +124,7 @@ class AdminSalonServiceClass {
         } catch {
           return {
             ...salon,
+            owner: (await getSalonOwner(salon.id)) ?? undefined,
             _count: { services: 0, stylists: 0, reviews: 0, bookings: 0 },
           };
         }
@@ -112,15 +139,17 @@ class AdminSalonServiceClass {
    */
   async getSalonById(id: string): Promise<SalonWithRelations> {
     const salon = await salonsFs.getById(id);
-    const [services, stylists] = await Promise.all([
+    const [services, stylists, owner] = await Promise.all([
       servicesSubFs.getAll(id),
       stylistsSubFs.getAll(id),
+      getSalonOwner(id),
     ]);
 
     return {
       ...salon,
       services,
       stylists,
+      owner: owner ?? undefined,
       _count: {
         services: services.length,
         stylists: stylists.length,
