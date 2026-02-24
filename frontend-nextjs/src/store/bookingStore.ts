@@ -540,15 +540,16 @@ export const useBookingStore = create<BookingState>()(
                 isActive: subService.isActive
               }));
 
+              const fs = foundService as any;
               selectedService = {
                 id: foundService.id,
-                displayId: foundService.displayId || 0,
+                displayId: foundService.displayId ?? 0,
                 name: foundService.name,
                 description: foundService.description,
                 price: foundService.price,
                 duration: foundService.duration,
-                category: foundService.category?.name || 'General',
-                emoji: foundService.emoji || '✨',
+                category: fs.category?.name || 'General',
+                emoji: fs.emoji || '✨',
                 subServices
               };
 
@@ -661,15 +662,16 @@ export const useBookingStore = create<BookingState>()(
                 isActive: subService.isActive
               }));
 
+              const fs = foundService as any;
               const service: Service = {
                 id: foundService.id,
-                displayId: foundService.displayId || 0,
+                displayId: foundService.displayId ?? 0,
                 name: foundService.name,
                 description: foundService.description,
                 price: foundService.price,
                 duration: foundService.duration,
-                category: foundService.category?.name || 'General',
-                emoji: foundService.emoji || '✨',
+                category: fs.category?.name || 'General',
+                emoji: fs.emoji || '✨',
                 subServices
               };
 

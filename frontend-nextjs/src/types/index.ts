@@ -169,13 +169,16 @@ export interface Salon {
   updatedAt: string;
 }
 
+/** Minimal owner info returned by admin salon APIs; full User when loaded elsewhere */
+export type SalonOwner = User | { name: string; email: string };
+
 export interface SalonWithRelations extends Salon {
   services?: Service[];
   stylists?: Stylist[];
   reviews?: Review[];
   bookings?: Booking[];
   offers?: Offer[];
-  owner?: User;
+  owner?: SalonOwner;
   _count?: {
     services: number;
     stylists: number;
