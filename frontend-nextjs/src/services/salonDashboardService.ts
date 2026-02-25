@@ -81,9 +81,12 @@ class SalonDashboardService {
       logger.info('Fetching salon dashboard stats...');
       const salonId = await getOwnerSalonId();
 
-      // Get today's date range
+      // Get today's date range (local date YYYY-MM-DD to match stored booking dates)
       const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().split('T')[0];
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      const startOfDay = `${y}-${m}-${d}`;
 
       // Get today's bookings
       const todayBookingsQuery = query(
