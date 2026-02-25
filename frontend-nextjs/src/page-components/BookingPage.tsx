@@ -364,7 +364,7 @@ const BookingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background-secondary via-white to-primary-50">
+    <div className="min-h-screen bg-gradient-to-br from-background-secondary via-white to-primary-50 pb-24 md:pb-8">
       <div className="container-custom py-4 sm:py-6 max-w-4xl mx-auto px-4 sm:px-6">
         {/* Page Header */}
         <div className="text-center mb-4 sm:mb-6">
