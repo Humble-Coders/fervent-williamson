@@ -11,6 +11,7 @@ import {
   getDocs,
   orderBy,
   getDoc,
+  getCountFromServer,
 } from './firestore/firestoreService';
 import { docToObject, type QueryDocumentSnapshot, type PaginatedResult } from './firestore/firestoreService';
 import { auth } from '@/config/firebase';
@@ -240,6 +241,44 @@ export const bookingService = {
       };
     } catch (error: any) {
       throw new Error(error.message || 'Failed to fetch salon bookings');
+    }
+  },
+
+  /**
+   * Get total booking counts per status for the current salon owner (for tab badges).
+   * Uses aggregation so counts are correct regardless of pagination.
+   */
+  async getSalonBookingCounts(): Promise<{ pending: number; confirmed: number; completed: number; cancelled: number }> {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const salonId = userDoc.data()?.salonId;
+      if (!salonId) throw new Error('User does not own a salon');
+
+      const statuses = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const;
+      const counts = await Promise.all(
+        statuses.map(async (status) => {
+          const q = query(
+            collection(db, 'bookings'),
+            where('salonId', '==', salonId),
+            where('status', '==', status)
+          );
+          const snap = await getCountFromServer(q);
+          return { status, count: snap.data().count };
+        })
+      );
+
+      return {
+        pending: counts.find(c => c.status === 'PENDING')?.count ?? 0,
+        confirmed: counts.find(c => c.status === 'CONFIRMED')?.count ?? 0,
+        completed: counts.find(c => c.status === 'COMPLETED')?.count ?? 0,
+        cancelled: counts.find(c => c.status === 'CANCELLED')?.count ?? 0,
+      };
+    } catch (error: any) {
+      logger.error('Error fetching salon booking counts:', error);
+      return { pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
     }
   },
 

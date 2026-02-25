@@ -21,6 +21,7 @@ import Button from '../../components/ui/Button';
 
 const BookingsPage: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, confirmed: 0, completed: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -42,11 +43,15 @@ const BookingsPage: React.FC = () => {
       setError(null);
       lastDocRef.current = null;
 
-      const result = await bookingService.getSalonBookings({ pageSize: 50 });
+      const [result, counts] = await Promise.all([
+        bookingService.getSalonBookings({ pageSize: 50 }),
+        bookingService.getSalonBookingCounts(),
+      ]);
       logger.info('Loaded salon bookings:', result);
       setBookings(result.data || []);
       setHasMore(result.hasMore);
       lastDocRef.current = result.lastDoc;
+      setStatusCounts(counts);
     } catch (err: unknown) {
       logger.error('Error loading bookings:', err);
       setError((err as Error).message);
@@ -86,6 +91,10 @@ const BookingsPage: React.FC = () => {
         booking.id === bookingId ? { ...booking, ...updatedBooking } : booking
       ));
 
+      // Refresh status counts so tab badges stay correct
+      const counts = await bookingService.getSalonBookingCounts();
+      setStatusCounts(counts);
+
       // Show success message
       alert(`Booking confirmed! User code: ${updatedBooking.userCode}`);
     } catch (err: unknown) {
@@ -111,6 +120,9 @@ const BookingsPage: React.FC = () => {
       ));
 
       setUserCodeInput('');
+      // Refresh status counts so tab badges stay correct
+      const counts = await bookingService.getSalonBookingCounts();
+      setStatusCounts(counts);
       alert('Booking completed successfully!');
     } catch (err: unknown) {
       alert(`Error completing booking: ${(err as Error).message}`);
@@ -196,9 +208,9 @@ const BookingsPage: React.FC = () => {
           {/* Tabs */}
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
             {[
-              { id: 'pending', label: 'Pending', count: bookings.filter(b => b.status === 'PENDING').length },
-              { id: 'confirmed', label: 'Confirmed', count: bookings.filter(b => b.status === 'CONFIRMED').length },
-              { id: 'completed', label: 'Completed', count: bookings.filter(b => b.status === 'COMPLETED').length },
+              { id: 'pending', label: 'Pending', count: statusCounts.pending },
+              { id: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed },
+              { id: 'completed', label: 'Completed', count: statusCounts.completed },
             ].map((tab) => (
               <button
                 key={tab.id}
