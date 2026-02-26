@@ -139,7 +139,7 @@ const AppointmentsPage: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
-    const unsubscribe = bookingService.listenUserUpcomingBookings(user.uid, (liveUpcoming) => {
+    const unsubscribe = bookingService.listenUserUpcomingBookings(user.id, (liveUpcoming) => {
       setAppointments((prev) => {
         // Replace the PENDING/CONFIRMED slice with live data; keep past bookings intact.
         const past = prev.filter(
@@ -152,7 +152,7 @@ const AppointmentsPage: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [isAuthenticated, user?.uid]);
+  }, [isAuthenticated, user?.id]);
 
   // Removed: handleCardClick - appointments should show details, not navigate to salon
 
