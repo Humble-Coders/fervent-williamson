@@ -70,10 +70,11 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
         return;
       }
 
-      const updatedBooking = await bookingService.updateBooking(booking.id, {
-        date: selectedDate,
-        time: selectedTime
-      });
+      const updatedBooking = await bookingService.rescheduleBooking(
+        booking.id,
+        selectedDate,
+        selectedTime
+      );
 
       onRescheduleSuccess(updatedBooking);
       onClose();

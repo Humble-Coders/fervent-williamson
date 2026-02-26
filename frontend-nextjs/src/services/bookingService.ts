@@ -145,6 +145,7 @@ export const bookingService = {
       let primaryServiceId: string = bookingData.serviceId || '';
       let totalDuration = 0;
       let totalPrice = 0;
+      let normalizedServices: BookingServiceItem[] | null = null;
 
       if (hasMultipleServices && bookingData.services) {
         // Multi-service booking: fetch all services and calculate aggregate price/duration
@@ -155,6 +156,14 @@ export const bookingService = {
         );
 
         const servicesData = serviceDocs.map((s) => s.data() || {});
+
+        // Normalize services payload to avoid undefined fields (Firestore does not allow them)
+        normalizedServices = bookingData.services.map((item) => ({
+          serviceId: item.serviceId,
+          ...(item.subServiceId ? { subServiceId: item.subServiceId } : {}),
+          ...(item.stylistId ? { stylistId: item.stylistId } : {}),
+          quantity: item.quantity && item.quantity > 0 ? item.quantity : 1,
+        }));
 
         bookingData.services.forEach((item, index) => {
           const serviceData = servicesData[index] || {};
@@ -199,7 +208,7 @@ export const bookingService = {
         userId: user.uid,
         salonId: bookingData.salonId,
         serviceId: primaryServiceId,
-        services: hasMultipleServices ? bookingData.services : undefined,
+        services: normalizedServices,
         stylistId: bookingData.stylistId || null,
         date: bookingData.date,
         time: bookingData.time,
@@ -344,6 +353,53 @@ export const bookingService = {
       return await bookingsFs.update(bookingId, bookingData as any);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to update booking');
+    }
+  },
+
+  /**
+   * Reschedule a booking:
+   * - Always updates date/time
+   * - Increments rescheduleCount
+   * - If current status is CONFIRMED, change back to PENDING so salon must confirm again
+   * - If current status is PENDING, keep it PENDING
+   */
+  async rescheduleBooking(bookingId: string, date: string, time: string): Promise<Booking> {
+    try {
+      return await runTransaction(db, async (transaction) => {
+        const bookingRef = doc(db, 'bookings', bookingId);
+        const snap = await transaction.get(bookingRef);
+        if (!snap.exists()) {
+          throw new Error('Booking not found');
+        }
+
+        const current = snap.data() as any;
+        const currentStatus = current.status as Booking['status'];
+
+        if (currentStatus === 'COMPLETED' || currentStatus === 'CANCELLED') {
+          throw new Error('This booking cannot be rescheduled');
+        }
+
+        const currentCount = Number(current.rescheduleCount || 0);
+        const newStatus: Booking['status'] =
+          currentStatus === 'CONFIRMED' ? 'PENDING' : currentStatus;
+
+        const updated: Partial<Booking> = {
+          date,
+          time,
+          status: newStatus,
+          rescheduleCount: currentCount + 1,
+        };
+
+        // If we moved back to PENDING, clear any existing user code so salon can generate a new one
+        if (currentStatus === 'CONFIRMED') {
+          (updated as any).userCode = null;
+        }
+
+        transaction.update(bookingRef, updated as any);
+        return { ...(current as any), ...updated } as Booking;
+      });
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to reschedule booking');
     }
   },
 
