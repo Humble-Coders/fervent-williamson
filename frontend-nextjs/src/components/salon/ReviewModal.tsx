@@ -17,6 +17,12 @@ interface ReviewModalProps {
     service: { name: string };
     date: string;
     status: string;
+    // Optional denormalized items when booking comes from Booking type
+    serviceItems?: Array<{
+      serviceName: string;
+      subServiceName?: string;
+      quantity?: number;
+    }>;
   }>;
 }
 
