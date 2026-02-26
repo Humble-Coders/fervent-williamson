@@ -255,22 +255,27 @@ export const useHomeStore = create<HomeState>()(
           );
 
           // Transform bookings to appointment format
-          const appointments = upcomingBookings.map(booking => ({
-            id: booking.id,
-            salonName: booking.salon.name,
-            service: booking.service.name,
-            date: new Date(booking.date).toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            }),
-            time: booking.time,
-            status: booking.status.toLowerCase() as 'confirmed' | 'pending' | 'cancelled',
-            emoji: (booking.service as any).emoji || '✨',
-            stylistName: booking.stylist?.name || 'Any Stylist',
-            location: booking.salon.address,
-          }));
+          const appointments = upcomingBookings.map(booking => {
+            const serviceLabel = booking.serviceItems?.length
+              ? booking.serviceItems.map(i => (i.quantity && i.quantity > 1 ? `${i.subServiceName || i.serviceName} (×${i.quantity})` : (i.subServiceName || i.serviceName))).join(', ')
+              : (booking.service?.name ?? 'Service');
+            return {
+              id: booking.id,
+              salonName: booking.salon.name,
+              service: serviceLabel,
+              date: new Date(booking.date).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              }),
+              time: booking.time,
+              status: booking.status.toLowerCase() as 'confirmed' | 'pending' | 'cancelled',
+              emoji: (booking.service as any)?.emoji || '✨',
+              stylistName: booking.stylist?.name || 'Any Stylist',
+              location: booking.salon.address,
+            };
+          });
 
           set({ upcomingAppointments: appointments });
         } catch (error) {

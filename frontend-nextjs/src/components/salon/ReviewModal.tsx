@@ -157,7 +157,9 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
                   <option value="">Choose a completed booking...</option>
                   {completedBookings.map((booking) => (
                     <option key={booking.id} value={booking.id}>
-                      {booking.service.name} - {new Date(booking.date).toLocaleDateString()}
+                      {booking.serviceItems?.length
+                        ? booking.serviceItems.map(i => i.subServiceName || i.serviceName).join(', ')
+                        : booking.service?.name ?? 'Service'} - {new Date(booking.date).toLocaleDateString()}
                     </option>
                   ))}
                 </select>

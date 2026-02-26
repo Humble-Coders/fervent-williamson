@@ -336,11 +336,27 @@ const BookingCard: React.FC<BookingCardProps> = ({
                 #{booking.id.slice(0, 6)}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600 truncate">{booking.service.name}</p>
+            {booking.serviceItems && booking.serviceItems.length > 0 ? (
+              <div className="space-y-0.5">
+                {booking.serviceItems.map((item, idx) => (
+                  <p key={idx} className="text-xs sm:text-sm text-gray-600">
+                    <span className="font-medium">{item.subServiceName || item.serviceName}</span>
+                    {item.subServiceName && <span className="text-gray-500 ml-1">({item.serviceName})</span>}
+                    {(item.quantity ?? 1) > 1 && <span className="text-gray-500 ml-1">×{item.quantity}</span>}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm text-gray-600 truncate">{booking.service?.name ?? 'Service'}</p>
+            )}
             <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1 overflow-hidden">
               <span className="truncate">User #{booking.user?.id?.slice(0, 6)}</span>
               <span>•</span>
-              <span className="truncate">Service: {booking.service.name}</span>
+              <span className="truncate">
+                {booking.serviceItems && booking.serviceItems.length > 0
+                  ? `${booking.serviceItems.length} service${booking.serviceItems.length !== 1 ? 's' : ''}`
+                  : `Service: ${booking.service?.name ?? ''}`}
+              </span>
               {booking.stylist && (
                 <>
                   <span>•</span>
@@ -385,7 +401,9 @@ const BookingCard: React.FC<BookingCardProps> = ({
       {/* Price */}
       <div className="mb-4">
         <span className="text-base sm:text-lg font-semibold text-gray-900">₹{booking.totalPrice}</span>
-        <span className="text-xs sm:text-sm text-gray-600 ml-2">({booking.service.duration} min)</span>
+        <span className="text-xs sm:text-sm text-gray-600 ml-2">
+          ({booking.serviceItems?.reduce((sum, i) => sum + i.duration * (i.quantity ?? 1), 0) ?? booking.service?.duration ?? 0} min)
+        </span>
       </div>
 
       {/* Notes */}

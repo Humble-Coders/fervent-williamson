@@ -247,7 +247,9 @@ const WriteReviewPage: React.FC = () => {
               <option value="">Choose a completed booking...</option>
               {userBookings.map((booking) => (
                 <option key={booking.id} value={booking.id}>
-                  {booking.service.name} - {new Date(booking.date).toLocaleDateString()}
+                  {booking.serviceItems?.length
+                    ? booking.serviceItems.map(i => i.subServiceName || i.serviceName).join(', ')
+                    : booking.service?.name ?? 'Service'} - {new Date(booking.date).toLocaleDateString()}
                 </option>
               ))}
             </select>

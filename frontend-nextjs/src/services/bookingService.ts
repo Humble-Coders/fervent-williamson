@@ -24,6 +24,17 @@ export interface BookingServiceItem {
   quantity?: number;
 }
 
+/** Denormalized service line for display (one per service/subservice + quantity). Stored on booking. */
+export interface BookingServiceItemDisplay {
+  serviceId: string;
+  subServiceId?: string;
+  serviceName: string;
+  subServiceName?: string;
+  price: number;
+  duration: number;
+  quantity: number;
+}
+
 export interface CreateBookingData {
   salonId: string;
   serviceId?: string;
@@ -92,6 +103,8 @@ export interface Booking {
     email: string;
     phone?: string;
   };
+  /** Denormalized list of all services in this booking (always set for new bookings; optional for legacy). */
+  serviceItems?: BookingServiceItemDisplay[];
 }
 
 const bookingsFs = new FirestoreService<Booking>('bookings');
@@ -140,6 +153,9 @@ export const bookingService = {
       const salonData = salonDoc.data();
       const userData = userDoc.data();
 
+      // Build denormalized serviceItems for display (used by both user and salon)
+      let serviceItems: BookingServiceItemDisplay[] = [];
+
       // Fetch service data from subcollection
       let primaryServiceData: any = {};
       let primaryServiceId: string = bookingData.serviceId || '';
@@ -148,7 +164,7 @@ export const bookingService = {
       let normalizedServices: BookingServiceItem[] | null = null;
 
       if (hasMultipleServices && bookingData.services) {
-        // Multi-service booking: fetch all services and calculate aggregate price/duration
+        // Multi-service booking: fetch all services and build serviceItems
         const serviceDocs = await Promise.all(
           bookingData.services.map((item) =>
             getDoc(doc(db, 'salons', bookingData.salonId, 'services', item.serviceId))
@@ -169,6 +185,8 @@ export const bookingService = {
           const serviceData = servicesData[index] || {};
           let price = Number(serviceData.price) || 0;
           let duration = Number(serviceData.duration) || 30;
+          let serviceName = serviceData.name || '';
+          let subServiceName: string | undefined;
 
           if (item.subServiceId && Array.isArray(serviceData.subServices)) {
             const subService = serviceData.subServices.find(
@@ -177,15 +195,26 @@ export const bookingService = {
             if (subService) {
               price = Number(subService.price) || price;
               duration = Number(subService.duration) || duration;
+              subServiceName = subService.name;
             }
           }
 
           const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
           totalPrice += price * quantity;
           totalDuration += duration * quantity;
+
+          const displayItem: BookingServiceItemDisplay = {
+            serviceId: item.serviceId,
+            serviceName,
+            price,
+            duration,
+            quantity,
+          };
+          if (item.subServiceId) displayItem.subServiceId = item.subServiceId;
+          if (subServiceName) displayItem.subServiceName = subServiceName;
+          serviceItems.push(displayItem);
         });
 
-        // Use the first selected service as the "primary" one for backward compatibility
         const firstItem = bookingData.services[0];
         primaryServiceId = firstItem.serviceId;
         primaryServiceData = servicesData[0] || {};
@@ -198,6 +227,30 @@ export const bookingService = {
         totalDuration = Number(primaryServiceData.duration) || 30;
         totalPrice = Number(primaryServiceData.price) || 0;
         primaryServiceId = bookingData.serviceId;
+
+        let subServiceName: string | undefined;
+        let price = Number(primaryServiceData.price) || 0;
+        let duration = Number(primaryServiceData.duration) || 30;
+        if (bookingData.subServiceId && Array.isArray(primaryServiceData.subServices)) {
+          const sub = primaryServiceData.subServices.find(
+            (ss: any) => ss.id === bookingData.subServiceId
+          );
+          if (sub) {
+            price = Number(sub.price) || price;
+            duration = Number(sub.duration) || duration;
+            subServiceName = sub.name;
+          }
+        }
+        const displayItem: BookingServiceItemDisplay = {
+          serviceId: bookingData.serviceId,
+          serviceName: primaryServiceData.name || '',
+          price,
+          duration,
+          quantity: 1,
+        };
+        if (bookingData.subServiceId) displayItem.subServiceId = bookingData.subServiceId;
+        if (subServiceName) displayItem.subServiceName = subServiceName;
+        serviceItems = [displayItem];
       }
 
       // Generate a simple verification code
@@ -221,6 +274,19 @@ export const bookingService = {
         verificationCode,
         userCode,
         rescheduleCount: 0,
+        // Denormalized list for display (no undefined values for Firestore)
+        serviceItems: serviceItems.map((item) => {
+          const o: Record<string, unknown> = {
+            serviceId: item.serviceId,
+            serviceName: item.serviceName,
+            price: item.price,
+            duration: item.duration,
+            quantity: item.quantity,
+          };
+          if (item.subServiceId != null) o.subServiceId = item.subServiceId;
+          if (item.subServiceName != null && item.subServiceName !== '') o.subServiceName = item.subServiceName;
+          return o;
+        }),
         // Denormalized salon data
         salon: {
           id: bookingData.salonId,

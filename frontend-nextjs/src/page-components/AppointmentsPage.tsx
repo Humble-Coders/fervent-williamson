@@ -439,20 +439,29 @@ const AppointmentsPage: React.FC = () => {
                             <div className="flex-1 min-w-0">
                               <h3 className="font-bold text-gray-900 text-base truncate">{appointment.salon.name}</h3>
                               {/* Show all booked services */}
-                              {(appointment as any).bookingItems && (appointment as any).bookingItems.length > 0 ? (
-                                <div className="mt-1 space-y-0.5">
-                                  {(appointment as any).bookingItems.map((item: any, idx: number) => (
-                                    <div key={idx} className="text-gray-600 text-sm">
-                                      <span className="font-medium">{item.subService?.name || item.service.name}</span>
-                                      {item.subService && (
-                                        <span className="text-xs text-gray-500 ml-1">({item.service.name})</span>
-                                      )}
+                              {(() => {
+                                const items = (appointment as Booking).serviceItems;
+                                if (items && items.length > 0) {
+                                  return (
+                                    <div className="mt-1 space-y-0.5">
+                                      {items.map((item: { serviceName: string; subServiceName?: string; quantity?: number }, idx: number) => (
+                                        <div key={idx} className="text-gray-600 text-sm">
+                                          <span className="font-medium">{item.subServiceName || item.serviceName}</span>
+                                          {item.subServiceName && (
+                                            <span className="text-xs text-gray-500 ml-1">({item.serviceName})</span>
+                                          )}
+                                          {(item.quantity ?? 1) > 1 && (
+                                            <span className="text-xs text-gray-500 ml-1">×{item.quantity}</span>
+                                          )}
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-600 text-sm truncate mt-1">{appointment.service.name}</p>
-                              )}
+                                  );
+                                }
+                                return (
+                                  <p className="text-gray-600 text-sm truncate mt-1">{appointment.service?.name ?? 'Service'}</p>
+                                );
+                              })()}
                             </div>
                             <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 ${getStatusColor(appointment.status)}`}>
                               {getStatusIcon(appointment.status)}
