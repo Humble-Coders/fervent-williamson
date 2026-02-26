@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Clock, Scissors, Hand, User, Heart, Star, ArrowLeft, ChevronRight, Plus, Minus, X } from 'lucide-react';
+import { Clock, Scissors, Hand, User, Heart, Star, ArrowLeft, ChevronRight, Plus, Minus, X, Search } from 'lucide-react';
 import Card from '../ui/Card';
 // import Badge from '../ui/Badge'; // Removed unused import
 import Button from '../ui/Button';
@@ -68,6 +68,7 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
   const [selectedGender, setSelectedGender] = useState<'MALE' | 'FEMALE' | 'UNISEX' | 'ALL'>('ALL');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [showSubServices, setShowSubServices] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Helper function to check if a service/subservice is selected
   const isServiceSelected = (serviceId: string, subServiceId?: string) => {
@@ -110,7 +111,7 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
 
   const categoryStats = getCategoryStats();
 
-  // Filter services by category and gender
+  // Filter services by category, gender, and search query
   const filteredServices = services.filter(service => {
     // Category filter
     const matchesCategory = selectedCategory === 'All' || (service.category || 'General') === selectedCategory;
@@ -121,7 +122,18 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
       service.gender === 'UNISEX' ||
       !service.gender; // Include services without gender specified
 
-    return matchesCategory && matchesGender;
+    // Search filter: match name, description, category; also match sub-service names
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch = !q ||
+      service.name.toLowerCase().includes(q) ||
+      (service.description || '').toLowerCase().includes(q) ||
+      (service.category || '').toLowerCase().includes(q) ||
+      (service.subServices?.some(ss =>
+        ss.name.toLowerCase().includes(q) ||
+        (ss.description || '').toLowerCase().includes(q)
+      ) ?? false);
+
+    return matchesCategory && matchesGender && matchesSearch;
   });
 
   // Group services by category for category filter
@@ -190,6 +202,33 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
           </p>
         </div>
 
+        {/* Search services - Only show for main services */}
+        {!showSubServices && (
+          <div className="max-w-md mx-auto mb-6 md:mb-8 animate-slide-up" style={{ animationDelay: '50ms' }}>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 sm:py-3 rounded-full border-2 border-neutral-200 bg-white text-text-primary placeholder:text-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-200 focus:outline-none transition-all text-sm sm:text-base"
+                aria-label="Search services"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-neutral-100 text-text-muted hover:text-text-primary transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Gender Filter - Only show for main services */}
         {!showSubServices && (
           <div className="flex justify-center mb-6 md:mb-8 animate-slide-up" style={{ animationDelay: '100ms' }}>
@@ -249,9 +288,41 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
               </div>
             </div>
 
+            {/* Search within sub-services */}
+            <div className="max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search options..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-full border-2 border-neutral-200 bg-white text-text-primary placeholder:text-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-200 focus:outline-none transition-all text-sm"
+                  aria-label="Search options"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-neutral-100 text-text-muted"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Sub-Services Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {selectedService.subServices?.map((subService) => {
+              {(selectedService.subServices ?? [])
+                .filter(sub => {
+                  const q = searchQuery.trim().toLowerCase();
+                  return !q ||
+                    sub.name.toLowerCase().includes(q) ||
+                    (sub.description || '').toLowerCase().includes(q);
+                })
+                .map((subService) => {
                 const isSelected = isServiceSelected(selectedService.id, subService.id);
                 const quantity = getServiceQuantity(selectedService.id, subService.id);
 
@@ -361,6 +432,31 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
           </div>
         ) : (
           /* Main Services Grid */
+          <>
+            {filteredServices.length === 0 ? (
+              <div className="text-center py-12 md:py-16 px-4 animate-slide-up">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-neutral-100 mb-4">
+                  <Search className="w-8 h-8 text-text-muted" />
+                </div>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">
+                  {searchQuery ? 'No services match your search' : 'No services available'}
+                </h3>
+                <p className="text-text-secondary text-sm mb-4 max-w-sm mx-auto">
+                  {searchQuery
+                    ? `Try a different search term or clear the search to see all services.`
+                    : 'There are no services in this category yet.'}
+                </p>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="text-primary-600 font-medium hover:underline"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+            ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {filteredServices.map((service) => {
               const isSelected = isServiceSelected(service.id);
@@ -500,6 +596,8 @@ const ServiceMenu: React.FC<ServiceMenuProps> = ({
               );
             })}
           </div>
+            )}
+          </>
         )}
 
         {/* Service Stats - Dynamic categories with emojis - Only show for main services */}
