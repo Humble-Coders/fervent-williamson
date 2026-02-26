@@ -35,6 +35,30 @@ const BookingsPage: React.FC = () => {
 
   useEffect(() => {
     loadBookings();
+
+    // Real-time listener for incoming PENDING bookings only.
+    // Other statuses are fetched once on load; this keeps read counts low.
+    let unsubscribe: (() => void) | null = null;
+
+    bookingService.getCurrentSalonId()
+      .then((salonId) => {
+        unsubscribe = bookingService.listenSalonPendingBookings(salonId, (livePending) => {
+          setBookings((prev) => {
+            // Replace the PENDING slice with live data; keep all other statuses from the initial load.
+            const nonPending = prev.filter((b) => b.status !== 'PENDING');
+            const merged = [...livePending, ...nonPending];
+            merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            return merged;
+          });
+          // Keep the pending count badge accurate
+          setStatusCounts((prev) => ({ ...prev, pending: livePending.length }));
+        });
+      })
+      .catch((err) => logger.error('Failed to start salon pending-bookings listener:', err));
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const loadBookings = async () => {

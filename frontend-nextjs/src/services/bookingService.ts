@@ -10,8 +10,10 @@ import {
   where,
   getDocs,
   orderBy,
+  limit,
   getDoc,
   getCountFromServer,
+  onSnapshot,
 } from './firestore/firestoreService';
 import { docToObject, type QueryDocumentSnapshot, type PaginatedResult } from './firestore/firestoreService';
 import { auth } from '@/config/firebase';
@@ -402,6 +404,82 @@ export const bookingService = {
       logger.error('Error fetching salon booking counts:', error);
       return { pending: 0, confirmed: 0, completed: 0, cancelled: 0 };
     }
+  },
+
+  // Resolve the salonId for the currently authenticated salon owner
+  async getCurrentSalonId(): Promise<string> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const salonId = userDoc.data()?.salonId;
+    if (!salonId) throw new Error('User does not own a salon');
+    return salonId;
+  },
+
+  /**
+   * Real-time listener for a salon's PENDING bookings (max 50, newest first).
+   * Fires immediately with the current list and then on every change.
+   * Returns an unsubscribe function – call it on component unmount.
+   *
+   * Only PENDING bookings are watched to keep read counts low.  When a booking
+   * is confirmed/completed/cancelled it drops out of this snapshot automatically.
+   */
+  listenSalonPendingBookings(
+    salonId: string,
+    onUpdate: (bookings: Booking[]) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, 'bookings'),
+      where('salonId', '==', salonId),
+      where('status', '==', 'PENDING'),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const bookings = snapshot.docs.map((d) => docToObject<Booking>(d));
+        onUpdate(bookings);
+      },
+      (error) => {
+        logger.error('listenSalonPendingBookings error:', error);
+        onError?.(error);
+      },
+    );
+  },
+
+  /**
+   * Real-time listener for the current user's PENDING and CONFIRMED bookings
+   * (upcoming appointments, max 20, newest first).
+   * Returns an unsubscribe function – call it on component unmount.
+   *
+   * Only upcoming statuses are watched; COMPLETED/CANCELLED bookings are static
+   * and do not need real-time updates, keeping read counts low.
+   */
+  listenUserUpcomingBookings(
+    userId: string,
+    onUpdate: (bookings: Booking[]) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, 'bookings'),
+      where('userId', '==', userId),
+      where('status', 'in', ['PENDING', 'CONFIRMED']),
+      orderBy('createdAt', 'desc'),
+      limit(20),
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const bookings = snapshot.docs.map((d) => docToObject<Booking>(d));
+        onUpdate(bookings);
+      },
+      (error) => {
+        logger.error('listenUserUpcomingBookings error:', error);
+        onError?.(error);
+      },
+    );
   },
 
   // Get booking by ID

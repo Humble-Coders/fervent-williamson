@@ -133,6 +133,27 @@ const AppointmentsPage: React.FC = () => {
     loadAppointments();
   }, [isAuthenticated, user]);
 
+  // Real-time listener for upcoming (PENDING / CONFIRMED) bookings.
+  // Only these statuses can change in real-time (e.g. salon confirms).
+  // COMPLETED / CANCELLED are historical and don't need live updates.
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const unsubscribe = bookingService.listenUserUpcomingBookings(user.uid, (liveUpcoming) => {
+      setAppointments((prev) => {
+        // Replace the PENDING/CONFIRMED slice with live data; keep past bookings intact.
+        const past = prev.filter(
+          (b) => b.status !== 'PENDING' && b.status !== 'CONFIRMED',
+        );
+        const merged = [...liveUpcoming, ...past];
+        merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return merged;
+      });
+    });
+
+    return () => unsubscribe();
+  }, [isAuthenticated, user?.uid]);
+
   // Removed: handleCardClick - appointments should show details, not navigate to salon
 
   // Handle reschedule button click
