@@ -113,11 +113,6 @@ const AddServicePage: React.FC = () => {
       return;
     }
 
-    if (!formData.categoryId) {
-      toast.error('Please select a service category');
-      return;
-    }
-
     if (formData.duration <= 0) {
       toast.error('Duration must be greater than 0');
       return;
@@ -199,16 +194,15 @@ const AddServicePage: React.FC = () => {
               />
             </div>
 
-            {/* Service Category */}
+            {/* Service Category (optional) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service Category *
+                Service Category (optional)
               </label>
               <select
                 value={formData.categoryId}
                 onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                required
               >
                 <option value="">Select a category</option>
                 {(categories || []).map(category => (
