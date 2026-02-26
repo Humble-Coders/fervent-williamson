@@ -550,19 +550,16 @@ export const bookingService = {
 
   // Check if booking can be cancelled
   canCancelBooking(booking: Booking): boolean {
-    if (booking.status === 'COMPLETED' || booking.status === 'CANCELLED') return false;
-    const bookingDateTime = new Date(`${booking.date}T${booking.time}`);
-    const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
-    return bookingDateTime > twoHoursFromNow;
+    // Allow cancel for any non-completed/non-cancelled booking
+    return booking.status !== 'COMPLETED' && booking.status !== 'CANCELLED';
   },
 
   // Check if booking can be rescheduled
   canRescheduleBooking(booking: Booking, maxRescheduleLimit: number = 3): boolean {
     if (booking.status === 'COMPLETED' || booking.status === 'CANCELLED') return false;
-    if (booking.rescheduleCount >= maxRescheduleLimit) return false;
-    const bookingDateTime = new Date(`${booking.date}T${booking.time}`);
-    const fourHoursFromNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
-    return bookingDateTime > fourHoursFromNow;
+    // Respect max reschedule limit but don't block based on time-of-day
+    if ((booking.rescheduleCount ?? 0) >= maxRescheduleLimit) return false;
+    return true;
   },
 
   // Generate available time slots
