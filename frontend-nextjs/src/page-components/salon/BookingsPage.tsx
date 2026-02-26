@@ -34,27 +34,32 @@ const BookingsPage: React.FC = () => {
   const [copiedCodes, setCopiedCodes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadBookings();
-
-    // Real-time listener for incoming PENDING bookings only.
-    // Other statuses are fetched once on load; this keeps read counts low.
     let unsubscribe: (() => void) | null = null;
 
-    bookingService.getCurrentSalonId()
-      .then((salonId) => {
+    const init = async () => {
+      // Wait for the initial full load to complete first.
+      // This prevents the listener's immediate snapshot from being overwritten
+      // by the async load that finishes slightly later.
+      await loadBookings();
+
+      try {
+        const salonId = await bookingService.getCurrentSalonId();
+        // Listen only to PENDING bookings – other statuses are static after load.
         unsubscribe = bookingService.listenSalonPendingBookings(salonId, (livePending) => {
           setBookings((prev) => {
-            // Replace the PENDING slice with live data; keep all other statuses from the initial load.
             const nonPending = prev.filter((b) => b.status !== 'PENDING');
-            const merged = [...livePending, ...nonPending];
-            merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            return merged;
+            return [...livePending, ...nonPending].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            );
           });
-          // Keep the pending count badge accurate
           setStatusCounts((prev) => ({ ...prev, pending: livePending.length }));
         });
-      })
-      .catch((err) => logger.error('Failed to start salon pending-bookings listener:', err));
+      } catch (err) {
+        logger.error('Failed to start pending bookings listener:', err);
+      }
+    };
+
+    init();
 
     return () => {
       if (unsubscribe) unsubscribe();

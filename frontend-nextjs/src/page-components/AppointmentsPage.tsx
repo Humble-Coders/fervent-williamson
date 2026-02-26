@@ -128,30 +128,40 @@ const AppointmentsPage: React.FC = () => {
     }
   }, [searchParams, appointments, router]);
 
-  // Load appointments when component mounts or user changes
+  // Load appointments then attach a real-time listener for status changes.
+  // Both are combined in one effect so the listener only starts after the
+  // initial fetch completes – preventing the fetch from overwriting live updates.
   useEffect(() => {
-    loadAppointments();
-  }, [isAuthenticated, user]);
+    if (!isAuthenticated || !user) {
+      setLoading(false);
+      return;
+    }
 
-  // Real-time listener for upcoming (PENDING / CONFIRMED) bookings.
-  // Only these statuses can change in real-time (e.g. salon confirms).
-  // COMPLETED / CANCELLED are historical and don't need live updates.
-  useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    let unsubscribe: (() => void) | null = null;
 
-    const unsubscribe = bookingService.listenUserUpcomingBookings(user.id, (liveUpcoming) => {
-      setAppointments((prev) => {
-        // Replace the PENDING/CONFIRMED slice with live data; keep past bookings intact.
-        const past = prev.filter(
-          (b) => b.status !== 'PENDING' && b.status !== 'CONFIRMED',
-        );
-        const merged = [...liveUpcoming, ...past];
-        merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        return merged;
+    const init = async () => {
+      // Wait for the full initial load before subscribing.
+      await loadAppointments();
+
+      // Listen only to PENDING + CONFIRMED – the only statuses that change
+      // in real-time (e.g. salon confirms a booking).
+      unsubscribe = bookingService.listenUserUpcomingBookings(user.id, (liveUpcoming) => {
+        setAppointments((prev) => {
+          const past = prev.filter(
+            (b) => b.status !== 'PENDING' && b.status !== 'CONFIRMED',
+          );
+          return [...liveUpcoming, ...past].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          );
+        });
       });
-    });
+    };
 
-    return () => unsubscribe();
+    init();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [isAuthenticated, user?.id]);
 
   // Removed: handleCardClick - appointments should show details, not navigate to salon
