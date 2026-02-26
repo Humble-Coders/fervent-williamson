@@ -185,7 +185,7 @@ export const bookingService = {
           const serviceData = servicesData[index] || {};
           let price = Number(serviceData.price) || 0;
           let duration = Number(serviceData.duration) || 30;
-          let serviceName = serviceData.name || '';
+          const serviceName = serviceData.name || '';
           let subServiceName: string | undefined;
 
           if (item.subServiceId && Array.isArray(serviceData.subServices)) {
