@@ -37,16 +37,16 @@ const BookingsPage: React.FC = () => {
     let unsubscribe: (() => void) | null = null;
 
     const init = async () => {
-      // Wait for the initial full load to complete first.
-      // This prevents the listener's immediate snapshot from being overwritten
-      // by the async load that finishes slightly later.
-      await loadBookings();
-
       try {
+        // Get salonId first, then start the real-time listener.
+        // The listener's first snapshot replaces the need to separately
+        // fetch pending bookings – it fires immediately with current data.
         const salonId = await bookingService.getCurrentSalonId();
-        // Listen only to PENDING bookings – other statuses are static after load.
+
         unsubscribe = bookingService.listenSalonPendingBookings(salonId, (livePending) => {
           setBookings((prev) => {
+            // Keep confirmed/completed/cancelled from the initial full load;
+            // replace the PENDING slice entirely with live data.
             const nonPending = prev.filter((b) => b.status !== 'PENDING');
             return [...livePending, ...nonPending].sort(
               (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -54,8 +54,11 @@ const BookingsPage: React.FC = () => {
           });
           setStatusCounts((prev) => ({ ...prev, pending: livePending.length }));
         });
+
+        // Load confirmed/completed/cancelled bookings once (no real-time needed).
+        await loadBookings();
       } catch (err) {
-        logger.error('Failed to start pending bookings listener:', err);
+        logger.error('Failed to initialise bookings:', err);
       }
     };
 
@@ -77,14 +80,22 @@ const BookingsPage: React.FC = () => {
         bookingService.getSalonBookingCounts(),
       ]);
       logger.info('Loaded salon bookings:', result);
-      setBookings(result.data || []);
+
+      // Merge: keep any live PENDING bookings already set by the listener,
+      // and add non-PENDING bookings from the initial fetch.
+      const nonPendingFromLoad = (result.data || []).filter((b) => b.status !== 'PENDING');
+      setBookings((prev) => {
+        const livePending = prev.filter((b) => b.status === 'PENDING');
+        return [...livePending, ...nonPendingFromLoad].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      });
       setHasMore(result.hasMore);
       lastDocRef.current = result.lastDoc;
       setStatusCounts(counts);
     } catch (err: unknown) {
       logger.error('Error loading bookings:', err);
       setError((err as Error).message);
-      // For demo purposes, use mock data when API fails
       setBookings(mockBookings);
     } finally {
       setLoading(false);
