@@ -348,6 +348,7 @@ const BookingPage: React.FC = () => {
         return (
           <BookingSummary
             service={selectedService}
+            services={selectedServices}
             salon={selectedSalon}
             stylist={selectedStylist || undefined}
             selectedDate={selectedDate}

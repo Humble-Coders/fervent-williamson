@@ -21,6 +21,7 @@ export interface BookingServiceItem {
   serviceId: string;
   subServiceId?: string;
   stylistId?: string;
+  quantity?: number;
 }
 
 export interface CreateBookingData {
@@ -48,6 +49,7 @@ export interface Booking {
   userId: string;
   salonId: string;
   serviceId: string;
+  services?: BookingServiceItem[];
   stylistId?: string;
   date: string;
   time: string;
@@ -127,6 +129,8 @@ export const bookingService = {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
 
+      const hasMultipleServices = Array.isArray(bookingData.services) && bookingData.services.length > 0;
+
       // Fetch denormalized data
       const [salonDoc, userDoc] = await Promise.all([
         getDoc(doc(db, 'salons', bookingData.salonId)),
@@ -137,12 +141,54 @@ export const bookingService = {
       const userData = userDoc.data();
 
       // Fetch service data from subcollection
-      let serviceData: any = {};
-      if (bookingData.serviceId) {
+      let primaryServiceData: any = {};
+      let primaryServiceId: string = bookingData.serviceId || '';
+      let totalDuration = 0;
+      let totalPrice = 0;
+
+      if (hasMultipleServices && bookingData.services) {
+        // Multi-service booking: fetch all services and calculate aggregate price/duration
+        const serviceDocs = await Promise.all(
+          bookingData.services.map((item) =>
+            getDoc(doc(db, 'salons', bookingData.salonId, 'services', item.serviceId))
+          )
+        );
+
+        const servicesData = serviceDocs.map((s) => s.data() || {});
+
+        bookingData.services.forEach((item, index) => {
+          const serviceData = servicesData[index] || {};
+          let price = Number(serviceData.price) || 0;
+          let duration = Number(serviceData.duration) || 30;
+
+          if (item.subServiceId && Array.isArray(serviceData.subServices)) {
+            const subService = serviceData.subServices.find(
+              (ss: any) => ss.id === item.subServiceId
+            );
+            if (subService) {
+              price = Number(subService.price) || price;
+              duration = Number(subService.duration) || duration;
+            }
+          }
+
+          const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1;
+          totalPrice += price * quantity;
+          totalDuration += duration * quantity;
+        });
+
+        // Use the first selected service as the "primary" one for backward compatibility
+        const firstItem = bookingData.services[0];
+        primaryServiceId = firstItem.serviceId;
+        primaryServiceData = servicesData[0] || {};
+      } else if (bookingData.serviceId) {
+        // Single-service booking
         const serviceDoc = await getDoc(
           doc(db, 'salons', bookingData.salonId, 'services', bookingData.serviceId)
         );
-        serviceData = serviceDoc.data() || {};
+        primaryServiceData = serviceDoc.data() || {};
+        totalDuration = Number(primaryServiceData.duration) || 30;
+        totalPrice = Number(primaryServiceData.price) || 0;
+        primaryServiceId = bookingData.serviceId;
       }
 
       // Generate a simple verification code
@@ -152,13 +198,14 @@ export const bookingService = {
       const booking: any = {
         userId: user.uid,
         salonId: bookingData.salonId,
-        serviceId: bookingData.serviceId || '',
+        serviceId: primaryServiceId,
+        services: hasMultipleServices ? bookingData.services : undefined,
         stylistId: bookingData.stylistId || null,
         date: bookingData.date,
         time: bookingData.time,
-        duration: serviceData.duration || 30,
+        duration: totalDuration || 30,
         status: 'PENDING',
-        totalPrice: serviceData.price || 0,
+        totalPrice: totalPrice || 0,
         notes: bookingData.notes || '',
         promoCode: bookingData.promoCode || null,
         discount: 0,
@@ -175,12 +222,12 @@ export const bookingService = {
         },
         // Denormalized service data
         service: {
-          id: bookingData.serviceId || '',
-          name: serviceData.name || '',
-          description: serviceData.description || '',
-          price: serviceData.price || 0,
-          duration: serviceData.duration || 30,
-          category: serviceData.categoryId || '',
+          id: primaryServiceId || '',
+          name: primaryServiceData.name || '',
+          description: primaryServiceData.description || '',
+          price: primaryServiceData.price || 0,
+          duration: primaryServiceData.duration || 30,
+          category: primaryServiceData.categoryId || '',
         },
         // Denormalized user data
         user: {

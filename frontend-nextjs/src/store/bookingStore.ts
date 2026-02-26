@@ -354,6 +354,7 @@ export const useBookingStore = create<BookingState>()(
                 serviceId: item.service.id,
                 subServiceId: item.subService?.id,
                 stylistId: item.stylist?.id,
+                quantity: item.quantity || 1,
               })),
               date: selectedDate,
               time: selectedTime,
