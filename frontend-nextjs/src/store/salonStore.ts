@@ -269,7 +269,10 @@ export const useSalonStore = create<SalonState>()(
 
 
           // Use transformed services from API, don't fall back to mock data
-          const finalServices = transformedServices;
+          // Sort by price ascending so users see cheapest options first
+          const finalServices = [...transformedServices].sort(
+            (a, b) => (a.price ?? 0) - (b.price ?? 0)
+          );
 
           // Transform API reviews data
           const transformedReviews: Review[] = (reviewsData.reviews || []).map((review: APIReview) => ({
