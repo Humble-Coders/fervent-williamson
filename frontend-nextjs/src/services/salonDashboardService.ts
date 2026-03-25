@@ -269,12 +269,17 @@ class SalonDashboardService {
       );
 
       const bookingsSnap = await getDocs(bookingsQuery);
-      const allBookings = bookingsSnap.docs.map((d) => {
-        const data = d.data() as Record<string, any>;
-        return { ...data, id: d.id };
+      const allBookings: Array<Record<string, any> & { id: string }> = bookingsSnap.docs.map((d) => {
+        return {
+          ...(d.data() as Record<string, any>),
+          id: d.id,
+        };
       });
 
-      const bookingsWithFee = allBookings.filter((b) => b.bookingFee && Number(b.bookingFee) > 0);
+      const bookingsWithFee = allBookings.filter((b) => {
+        const bookingFeeValue = Number((b as any).bookingFee ?? 0);
+        return bookingFeeValue > 0;
+      });
 
       const entries: BookingFeeEntry[] = bookingsWithFee.map((b) => ({
         id: b.id,
@@ -282,7 +287,7 @@ class SalonDashboardService {
         time: b.time || '',
         customerName: b.user?.name || 'Unknown',
         serviceName: b.service?.name || 'Unknown Service',
-        bookingFee: Number(b.bookingFee),
+        bookingFee: Number((b as any).bookingFee ?? 0),
         status: b.status || 'UNKNOWN',
       }));
 
@@ -328,20 +333,25 @@ class SalonDashboardService {
         unsubFirestore = onSnapshot(
           q,
           (snapshot) => {
-            const allBookings = snapshot.docs.map((d) => {
-              const data = d.data() as Record<string, any>;
-              return { ...data, id: d.id };
+            const allBookings: Array<Record<string, any> & { id: string }> = snapshot.docs.map((d) => {
+              return {
+                ...(d.data() as Record<string, any>),
+                id: d.id,
+              };
             });
-            const bookingsWithFee = allBookings.filter(
-              (b) => b.bookingFee && Number(b.bookingFee) > 0,
-            );
+
+            const bookingsWithFee = allBookings.filter((b) => {
+              const bookingFeeValue = Number((b as any).bookingFee ?? 0);
+              return bookingFeeValue > 0;
+            });
+
             const entries: BookingFeeEntry[] = bookingsWithFee.map((b) => ({
               id: b.id,
               date: b.date || '',
               time: b.time || '',
               customerName: b.user?.name || 'Unknown',
               serviceName: b.service?.name || 'Unknown Service',
-              bookingFee: Number(b.bookingFee),
+              bookingFee: Number((b as any).bookingFee ?? 0),
               status: b.status || 'UNKNOWN',
             }));
             const totalBookingFees = entries.reduce((sum, e) => sum + e.bookingFee, 0);
