@@ -534,8 +534,11 @@ const AppointmentsPage: React.FC = () => {
                         <div>
                           <p className="text-xs text-gray-600 mb-1">Total Amount</p>
                           <div className="text-2xl font-bold text-gray-900">
-                            {appointment.totalPrice}
+                            ₹{(Number(appointment.totalPrice) || 0) + (appointment.bookingFee ? Number(appointment.bookingFee) : 0)}
                           </div>
+                          {appointment.bookingFee > 0 && (
+                            <p className="text-xs text-gray-500">incl. ₹{Number(appointment.bookingFee)} booking fee</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <a

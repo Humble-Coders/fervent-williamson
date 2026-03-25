@@ -4,11 +4,10 @@ import {
   query,
   where,
   getDocs,
-  orderBy,
+  onSnapshot,
   doc,
   getDoc,
 } from './firestore/firestoreService';
-import { docToObject } from './firestore/firestoreService';
 import { auth } from '@/config/firebase';
 import { logger } from '@/config/logger';
 
@@ -58,6 +57,22 @@ export interface SalonInsights {
     endDate: string | null;
     isAllTime: boolean;
   };
+}
+
+export interface BookingFeeEntry {
+  id: string;
+  date: string;
+  time: string;
+  customerName: string;
+  serviceName: string;
+  bookingFee: number;
+  status: string;
+}
+
+export interface BookingFeesData {
+  totalBookingFees: number;
+  bookingCount: number;
+  entries: BookingFeeEntry[];
 }
 
 /**
@@ -235,6 +250,121 @@ class SalonDashboardService {
       logger.error('Error fetching insights:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get booking fees collected by the salon within a date range.
+   * Only includes bookings that actually have the bookingFee field set.
+   */
+  async getBookingFees(startDate: string, endDate: string): Promise<BookingFeesData> {
+    try {
+      logger.info('Fetching booking fees...', { startDate, endDate });
+      const salonId = await getOwnerSalonId();
+
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('salonId', '==', salonId),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+      );
+
+      const bookingsSnap = await getDocs(bookingsQuery);
+      const allBookings = bookingsSnap.docs.map((d) => {
+        const data = d.data() as Record<string, any>;
+        return { ...data, id: d.id };
+      });
+
+      const bookingsWithFee = allBookings.filter((b) => b.bookingFee && Number(b.bookingFee) > 0);
+
+      const entries: BookingFeeEntry[] = bookingsWithFee.map((b) => ({
+        id: b.id,
+        date: b.date || '',
+        time: b.time || '',
+        customerName: b.user?.name || 'Unknown',
+        serviceName: b.service?.name || 'Unknown Service',
+        bookingFee: Number(b.bookingFee),
+        status: b.status || 'UNKNOWN',
+      }));
+
+      const totalBookingFees = entries.reduce((sum, e) => sum + e.bookingFee, 0);
+
+      const result: BookingFeesData = {
+        totalBookingFees,
+        bookingCount: entries.length,
+        entries,
+      };
+
+      logger.info('Booking fees loaded:', { total: result.totalBookingFees, count: result.bookingCount });
+      return result;
+    } catch (error) {
+      logger.error('Error fetching booking fees:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Real-time listener for booking fees within a date range.
+   * Fires immediately with current data then on every change.
+   * Returns an unsubscribe function.
+   */
+  listenBookingFees(
+    startDate: string,
+    endDate: string,
+    onUpdate: (data: BookingFeesData) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    let salonIdResolved: string | null = null;
+    let unsubFirestore: (() => void) | null = null;
+
+    getOwnerSalonId()
+      .then((salonId) => {
+        salonIdResolved = salonId;
+        const q = query(
+          collection(db, 'bookings'),
+          where('salonId', '==', salonId),
+          where('date', '>=', startDate),
+          where('date', '<=', endDate),
+        );
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const allBookings = snapshot.docs.map((d) => {
+              const data = d.data() as Record<string, any>;
+              return { ...data, id: d.id };
+            });
+            const bookingsWithFee = allBookings.filter(
+              (b) => b.bookingFee && Number(b.bookingFee) > 0,
+            );
+            const entries: BookingFeeEntry[] = bookingsWithFee.map((b) => ({
+              id: b.id,
+              date: b.date || '',
+              time: b.time || '',
+              customerName: b.user?.name || 'Unknown',
+              serviceName: b.service?.name || 'Unknown Service',
+              bookingFee: Number(b.bookingFee),
+              status: b.status || 'UNKNOWN',
+            }));
+            const totalBookingFees = entries.reduce((sum, e) => sum + e.bookingFee, 0);
+            onUpdate({
+              totalBookingFees,
+              bookingCount: entries.length,
+              entries,
+            });
+          },
+          (error) => {
+            logger.error('listenBookingFees error:', error);
+            onError?.(error);
+          },
+        );
+      })
+      .catch((error) => {
+        logger.error('listenBookingFees: failed to get salonId:', error);
+        onError?.(error);
+      });
+
+    return () => {
+      if (unsubFirestore) unsubFirestore();
+    };
   }
 }
 

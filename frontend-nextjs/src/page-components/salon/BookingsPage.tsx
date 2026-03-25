@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { logger } from '@/config/logger';
 import {
   Calendar,
@@ -15,7 +15,6 @@ import {
   Check
 } from 'lucide-react';
 import { bookingService, Booking } from '../../services/bookingService';
-import type { QueryDocumentSnapshot } from '../../services/firestore/firestoreService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Button from '../../components/ui/Button';
 
@@ -23,9 +22,6 @@ const BookingsPage: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [statusCounts, setStatusCounts] = useState({ pending: 0, confirmed: 0, completed: 0, cancelled: 0 });
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const lastDocRef = useRef<QueryDocumentSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'completed' | 'cancelled'>('pending');
   const [confirmingBooking, setConfirmingBooking] = useState<string | null>(null);
@@ -38,27 +34,23 @@ const BookingsPage: React.FC = () => {
 
     const init = async () => {
       try {
-        // Get salonId first, then start the real-time listener.
-        // The listener's first snapshot replaces the need to separately
-        // fetch pending bookings – it fires immediately with current data.
         const salonId = await bookingService.getCurrentSalonId();
 
-        unsubscribe = bookingService.listenSalonPendingBookings(salonId, (livePending) => {
-          setBookings((prev) => {
-            // Keep confirmed/completed/cancelled from the initial full load;
-            // replace the PENDING slice entirely with live data.
-            const nonPending = prev.filter((b) => b.status !== 'PENDING');
-            return [...livePending, ...nonPending].sort(
-              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-            );
+        unsubscribe = bookingService.listenAllSalonBookings(salonId, (allBookings) => {
+          setBookings(allBookings);
+          setStatusCounts({
+            pending: allBookings.filter((b) => b.status === 'PENDING').length,
+            confirmed: allBookings.filter((b) => b.status === 'CONFIRMED').length,
+            completed: allBookings.filter((b) => b.status === 'COMPLETED').length,
+            cancelled: allBookings.filter((b) => b.status === 'CANCELLED').length,
           });
-          setStatusCounts((prev) => ({ ...prev, pending: livePending.length }));
+          setLoading(false);
         });
-
-        // Load confirmed/completed/cancelled bookings once (no real-time needed).
-        await loadBookings();
       } catch (err) {
         logger.error('Failed to initialise bookings:', err);
+        setError((err as Error).message);
+        setBookings(mockBookings);
+        setLoading(false);
       }
     };
 
@@ -69,73 +61,10 @@ const BookingsPage: React.FC = () => {
     };
   }, []);
 
-  const loadBookings = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      lastDocRef.current = null;
-
-      const [result, counts] = await Promise.all([
-        bookingService.getSalonBookings({ pageSize: 50 }),
-        bookingService.getSalonBookingCounts(),
-      ]);
-      logger.info('Loaded salon bookings:', result);
-
-      // Merge: keep any live PENDING bookings already set by the listener,
-      // and add non-PENDING bookings from the initial fetch.
-      const nonPendingFromLoad = (result.data || []).filter((b) => b.status !== 'PENDING');
-      setBookings((prev) => {
-        const livePending = prev.filter((b) => b.status === 'PENDING');
-        return [...livePending, ...nonPendingFromLoad].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-      });
-      setHasMore(result.hasMore);
-      lastDocRef.current = result.lastDoc;
-      setStatusCounts(counts);
-    } catch (err: unknown) {
-      logger.error('Error loading bookings:', err);
-      setError((err as Error).message);
-      setBookings(mockBookings);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMoreBookings = async () => {
-    if (loadingMore || !hasMore) return;
-
-    try {
-      setLoadingMore(true);
-      const result = await bookingService.getSalonBookings({
-        pageSize: 50,
-        lastDoc: lastDocRef.current,
-      });
-      setBookings(prev => [...prev, ...result.data]);
-      setHasMore(result.hasMore);
-      lastDocRef.current = result.lastDoc;
-    } catch (err: unknown) {
-      logger.error('Error loading more bookings:', err);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
   const handleConfirmBooking = async (bookingId: string) => {
     try {
       setConfirmingBooking(bookingId);
       const updatedBooking = await bookingService.confirmBooking(bookingId);
-
-      // Update the booking in the list
-      setBookings(prev => prev.map(booking =>
-        booking.id === bookingId ? { ...booking, ...updatedBooking } : booking
-      ));
-
-      // Refresh status counts so tab badges stay correct
-      const counts = await bookingService.getSalonBookingCounts();
-      setStatusCounts(counts);
-
-      // Show success message
       alert(`Booking confirmed! User code: ${updatedBooking.userCode}`);
     } catch (err: unknown) {
       alert(`Error confirming booking: ${(err as Error).message}`);
@@ -152,17 +81,8 @@ const BookingsPage: React.FC = () => {
 
     try {
       setCompletingBooking(bookingId);
-      const updatedBooking = await bookingService.completeBooking(bookingId, userCodeInput);
-
-      // Update the booking in the list
-      setBookings(prev => prev.map(booking =>
-        booking.id === bookingId ? { ...booking, ...updatedBooking } : booking
-      ));
-
+      await bookingService.completeBooking(bookingId, userCodeInput);
       setUserCodeInput('');
-      // Refresh status counts so tab badges stay correct
-      const counts = await bookingService.getSalonBookingCounts();
-      setStatusCounts(counts);
       alert('Booking completed successfully!');
     } catch (err: unknown) {
       alert(`Error completing booking: ${(err as Error).message}`);
@@ -307,25 +227,6 @@ const BookingsPage: React.FC = () => {
                 getStatusColor={getStatusColor}
               />
             ))}
-            {/* Load More */}
-            {hasMore && (
-              <div className="text-center pt-4">
-                <Button
-                  variant="outline"
-                  onClick={loadMoreBookings}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? (
-                    <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Load More Bookings'
-                  )}
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -440,10 +341,13 @@ const BookingCard: React.FC<BookingCardProps> = ({
 
       {/* Price */}
       <div className="mb-4">
-        <span className="text-base sm:text-lg font-semibold text-gray-900">₹{booking.totalPrice}</span>
+        <span className="text-base sm:text-lg font-semibold text-gray-900">₹{(Number(booking.totalPrice) || 0) + (booking.bookingFee ? Number(booking.bookingFee) : 0)}</span>
         <span className="text-xs sm:text-sm text-gray-600 ml-2">
           ({booking.serviceItems?.reduce((sum, i) => sum + i.duration * (i.quantity ?? 1), 0) ?? booking.service?.duration ?? 0} min)
         </span>
+        {booking.bookingFee > 0 && (
+          <span className="text-xs text-gray-500 ml-2">(incl. ₹{Number(booking.bookingFee)} booking fee)</span>
+        )}
       </div>
 
       {/* Notes */}
@@ -551,6 +455,7 @@ const mockBookings: Booking[] = [
     duration: 60,
     status: 'PENDING',
     totalPrice: 50,
+    bookingFee: 5,
     notes: 'First time customer',
     discount: 0,
     rescheduleCount: 0,
@@ -582,6 +487,7 @@ const mockBookings: Booking[] = [
     duration: 120,
     status: 'CONFIRMED',
     totalPrice: 75,
+    bookingFee: 5,
     userCode: '123456',
     discount: 0,
     rescheduleCount: 0,

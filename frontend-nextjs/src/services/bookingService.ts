@@ -68,6 +68,7 @@ export interface Booking {
   duration: number;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
   totalPrice: number;
+  bookingFee: number;
   notes?: string;
   promoCode?: string;
   discount: number;
@@ -269,6 +270,7 @@ export const bookingService = {
         duration: totalDuration || 30,
         status: 'PENDING',
         totalPrice: totalPrice || 0,
+        bookingFee: 5,
         notes: bookingData.notes || '',
         promoCode: bookingData.promoCode || null,
         discount: 0,
@@ -441,6 +443,33 @@ export const bookingService = {
       },
       (error) => {
         logger.error('listenSalonPendingBookings error:', error);
+        onError?.(error);
+      },
+    );
+  },
+
+  /**
+   * Real-time listener for ALL of a salon's bookings (every status).
+   * Returns an unsubscribe function – call it on component unmount.
+   */
+  listenAllSalonBookings(
+    salonId: string,
+    onUpdate: (bookings: Booking[]) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, 'bookings'),
+      where('salonId', '==', salonId),
+      orderBy('createdAt', 'desc'),
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const allBookings = snapshot.docs.map((d) => docToObject<Booking>(d));
+        onUpdate(allBookings);
+      },
+      (error) => {
+        logger.error('listenAllSalonBookings error:', error);
         onError?.(error);
       },
     );

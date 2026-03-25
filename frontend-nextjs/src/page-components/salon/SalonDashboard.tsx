@@ -1,8 +1,9 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/config/logger';
-import { Calendar, Users, IndianRupee, Clock, TrendingUp, Scissors, Sparkles, BarChart3, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { salonDashboardService, DashboardStats, UpcomingBooking, SalonInsights } from '@/services/salonDashboardService';
+import { Calendar, Users, IndianRupee, Clock, TrendingUp, Scissors, Sparkles, BarChart3, CheckCircle, XCircle, AlertCircle, Receipt } from 'lucide-react';
+import { salonDashboardService, DashboardStats, UpcomingBooking, SalonInsights, BookingFeesData } from '@/services/salonDashboardService';
+import Link from 'next/link';
 
 const SalonDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
@@ -13,6 +14,7 @@ const SalonDashboard: React.FC = () => {
   });
   const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
   const [insights, setInsights] = useState<SalonInsights | null>(null);
+  const [monthlyFees, setMonthlyFees] = useState<BookingFeesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,8 @@ const SalonDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let unsubFees: (() => void) | null = null;
+
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
@@ -43,8 +47,22 @@ const SalonDashboard: React.FC = () => {
         setStats(data.stats);
         setUpcomingBookings(data.upcomingBookings);
 
-        // Fetch insights (all-time by default)
         await fetchInsights();
+
+        const now = new Date();
+        const y = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const m = String(month).padStart(2, '0');
+        const firstDay = `${y}-${m}-01`;
+        const lastDay = new Date(y, month, 0).getDate();
+        const endDay = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+        unsubFees = salonDashboardService.listenBookingFees(
+          firstDay,
+          endDay,
+          (feesData) => setMonthlyFees(feesData),
+          (err) => logger.error('Error listening to booking fees:', err),
+        );
       } catch (error: any) {
         logger.error('Error fetching dashboard data:', error);
         setError(error.message || 'Failed to load dashboard data');
@@ -54,6 +72,10 @@ const SalonDashboard: React.FC = () => {
     };
 
     fetchDashboardData();
+
+    return () => {
+      if (unsubFees) unsubFees();
+    };
   }, [fetchInsights]);
 
   const handleDateFilter = () => {
@@ -175,6 +197,31 @@ const SalonDashboard: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Monthly Booking Fees */}
+      {monthlyFees && (
+        <Link href="/salon/booking-fees" className="block">
+          <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Booking Fees This Month</p>
+                <p className="text-2xl font-bold text-orange-700">
+                  ₹{monthlyFees.totalBookingFees.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="p-3 bg-orange-100 rounded-full">
+                <Receipt className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-sm text-gray-500">
+                From {monthlyFees.bookingCount} booking{monthlyFees.bookingCount !== 1 ? 's' : ''} this month
+              </span>
+              <span className="text-sm text-orange-600 font-medium">View Details &rarr;</span>
+            </div>
+          </div>
+        </Link>
+      )}
 
       {/* Today's Schedule */}
       <div className="grid grid-cols-1 gap-6">

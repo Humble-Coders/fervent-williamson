@@ -59,6 +59,8 @@ export interface BookingSummaryProps {
   isLoading: boolean;
 }
 
+const BOOKING_FEE = 5;
+
 const BookingSummary: React.FC<BookingSummaryProps> = ({
   service,
   services = [],
@@ -112,7 +114,7 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
     return sum + price * quantity;
   }, 0);
 
-  const total = subtotal - discount;
+  const total = subtotal - discount + BOOKING_FEE;
 
   const paymentMethodNames: { [key: string]: string } = {
     card: 'Credit/Debit Card 💳',
@@ -236,6 +238,11 @@ const BookingSummary: React.FC<BookingSummaryProps> = ({
                 <span>-₹{discount}</span>
               </div>
             )}
+
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Booking Fee</span>
+              <span className="text-text-primary">₹{BOOKING_FEE}</span>
+            </div>
 
             <div className="flex justify-between text-base font-semibold text-text-primary border-t border-neutral-200 pt-2">
               <span>Total</span>

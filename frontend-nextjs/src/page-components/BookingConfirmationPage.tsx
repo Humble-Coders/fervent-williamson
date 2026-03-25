@@ -124,7 +124,7 @@ const BookingConfirmationPage: React.FC = () => {
       stylist={selectedStylist || undefined}
       date={selectedDate || ''}
       time={selectedTime || ''}
-      total={selectedService.price - discount}
+      total={selectedService.price - discount + 5}
       verificationCode={verificationCode}
       onAddToCalendar={handleAddToCalendar}
       onDownloadReceipt={handleDownloadReceipt}
