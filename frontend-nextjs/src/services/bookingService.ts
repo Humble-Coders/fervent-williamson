@@ -74,6 +74,8 @@ export interface Booking {
   discount: number;
   verificationCode?: string;
   userCode?: string;
+  /** Set when status becomes CANCELLED (for emails / display). */
+  cancelledBy?: 'SALON' | 'USER';
   rescheduleCount: number;
   createdAt: string;
   updatedAt: string;
@@ -476,6 +478,34 @@ export const bookingService = {
   },
 
   /**
+   * Real-time listener for all of a user's bookings (every status).
+   * Same query shape as upcoming listener; use this when the UI must reflect
+   * cancellations and completions without losing documents.
+   */
+  listenAllUserBookings(
+    userId: string,
+    onUpdate: (bookings: Booking[]) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    const q = query(
+      collection(db, 'bookings'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const allBookings = snapshot.docs.map((d) => docToObject<Booking>(d));
+        onUpdate(allBookings);
+      },
+      (error) => {
+        logger.error('listenAllUserBookings error:', error);
+        onError?.(error);
+      },
+    );
+  },
+
+  /**
    * Real-time listener for a user's upcoming (PENDING + CONFIRMED) bookings.
    * Uses only `where('userId', '==', userId)` to avoid needing a composite
    * Firestore index. Status filtering is done client-side.
@@ -571,10 +601,52 @@ export const bookingService = {
     }
   },
 
-  // Cancel a booking
-  async cancelBooking(bookingId: string): Promise<Booking> {
+  /**
+   * Cancel a booking.
+   * - `USER`: booking must belong to the signed-in user; allowed while not completed/cancelled (same as canCancelBooking).
+   * - `SALON`: signed-in user must own the salon; only **PENDING** bookings can be cancelled.
+   */
+  async cancelBooking(
+    bookingId: string,
+    options?: { cancelledBy?: 'SALON' | 'USER' },
+  ): Promise<Booking> {
     try {
-      return await bookingsFs.update(bookingId, { status: 'CANCELLED' } as any);
+      const booking = await bookingsFs.getById(bookingId);
+      if (!booking) throw new Error('Booking not found');
+
+      if (booking.status === 'CANCELLED') {
+        return booking;
+      }
+      if (booking.status === 'COMPLETED') {
+        throw new Error('Cannot cancel a completed booking');
+      }
+
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      const cancelledBy = options?.cancelledBy ?? 'USER';
+
+      if (cancelledBy === 'SALON') {
+        const salonId = await this.getCurrentSalonId();
+        if (booking.salonId !== salonId) {
+          throw new Error('Not authorized to cancel this booking');
+        }
+        if (booking.status !== 'PENDING') {
+          throw new Error('Only pending bookings can be cancelled by the salon');
+        }
+      } else {
+        if (booking.userId !== user.uid) {
+          throw new Error('Not authorized to cancel this booking');
+        }
+        if (!this.canCancelBooking(booking)) {
+          throw new Error('This booking cannot be cancelled');
+        }
+      }
+
+      return await bookingsFs.update(bookingId, {
+        status: 'CANCELLED',
+        cancelledBy,
+      } as any);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to cancel booking');
     }

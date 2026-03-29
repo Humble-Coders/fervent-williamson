@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { logger } from '@/config/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -21,7 +21,6 @@ import {
 import Link from 'next/link';
 import { useAuthStore } from '../store/authStore';
 import { bookingService, Booking } from '../services/bookingService';
-import type { QueryDocumentSnapshot } from '../services/firestore/firestoreService';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import RescheduleModal from '../components/booking/RescheduleModal';
 
@@ -35,58 +34,13 @@ const AppointmentsPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [appointments, setAppointments] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const lastDocRef = useRef<QueryDocumentSnapshot | null>(null);
+  const [listenRetry, setListenRetry] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [rescheduleModal, setRescheduleModal] = useState<{
     isOpen: boolean;
     booking: Booking | null;
   }>({ isOpen: false, booking: null });
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  // Load appointments from API (cursor-based)
-  const loadAppointments = async () => {
-    if (!isAuthenticated || !user) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      lastDocRef.current = null;
-      const result = await bookingService.getUserBookings({ pageSize: 20 });
-      setAppointments(result.data);
-      setHasMore(result.hasMore);
-      lastDocRef.current = result.lastDoc;
-    } catch (err: unknown) {
-      logger.error('Error loading appointments:', err);
-      setError((err as Error).message || 'Failed to load appointments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load more appointments
-  const loadMoreAppointments = async () => {
-    if (loadingMore || !hasMore) return;
-
-    try {
-      setLoadingMore(true);
-      const result = await bookingService.getUserBookings({
-        pageSize: 20,
-        lastDoc: lastDocRef.current,
-      });
-      setAppointments(prev => [...prev, ...result.data]);
-      setHasMore(result.hasMore);
-      lastDocRef.current = result.lastDoc;
-    } catch (err: unknown) {
-      logger.error('Error loading more appointments:', err);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
 
   // Check for success message from booking flow and handle query parameters
   useEffect(() => {
@@ -128,41 +82,34 @@ const AppointmentsPage: React.FC = () => {
     }
   }, [searchParams, appointments, router]);
 
-  // Load appointments then attach a real-time listener for status changes.
-  // Both are combined in one effect so the listener only starts after the
-  // initial fetch completes – preventing the fetch from overwriting live updates.
+  // Real-time list of all bookings so salon cancellations (and other status changes) stay in sync.
   useEffect(() => {
     if (!isAuthenticated || !user) {
       setLoading(false);
       return;
     }
 
-    let unsubscribe: (() => void) | null = null;
+    setLoading(true);
+    setError(null);
 
-    const init = async () => {
-      // Wait for the full initial load before subscribing.
-      await loadAppointments();
-
-      // Listen only to PENDING + CONFIRMED – the only statuses that change
-      // in real-time (e.g. salon confirms a booking).
-      unsubscribe = bookingService.listenUserUpcomingBookings(user.id, (liveUpcoming) => {
-        setAppointments((prev) => {
-          const past = prev.filter(
-            (b) => b.status !== 'PENDING' && b.status !== 'CONFIRMED',
-          );
-          return [...liveUpcoming, ...past].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          );
-        });
-      });
-    };
-
-    init();
+    const unsubscribe = bookingService.listenAllUserBookings(
+      user.id,
+      (all) => {
+        setAppointments(all);
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        logger.error('Appointments listener error:', err);
+        setError(err.message || 'Failed to load appointments');
+        setLoading(false);
+      },
+    );
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
     };
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, listenRetry]);
 
   // Removed: handleCardClick - appointments should show details, not navigate to salon
 
@@ -182,13 +129,13 @@ const AppointmentsPage: React.FC = () => {
 
     try {
       setActionLoading(appointment.id);
-      await bookingService.cancelBooking(appointment.id);
+      await bookingService.cancelBooking(appointment.id, { cancelledBy: 'USER' });
 
       // Update the appointment in the list
       setAppointments(prev =>
         prev.map(apt =>
           apt.id === appointment.id
-            ? { ...apt, status: 'CANCELLED' as const }
+            ? { ...apt, status: 'CANCELLED' as const, cancelledBy: 'USER' as const }
             : apt
         )
       );
@@ -350,7 +297,12 @@ const AppointmentsPage: React.FC = () => {
                 <span className="font-medium">{error}</span>
               </div>
               <button
-                onClick={loadAppointments}
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  setListenRetry((r) => r + 1);
+                }}
                 className="text-red-600 hover:text-red-800 text-sm font-medium"
               >
                 Retry
@@ -499,6 +451,13 @@ const AppointmentsPage: React.FC = () => {
                               {appointment.status}
                             </div>
                           </div>
+                          {appointment.status === 'CANCELLED' && appointment.cancelledBy && (
+                            <p className="text-xs text-red-700 mt-1">
+                              {appointment.cancelledBy === 'SALON'
+                                ? 'Cancelled by the salon'
+                                : 'You cancelled this booking'}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -536,7 +495,7 @@ const AppointmentsPage: React.FC = () => {
                           <div className="text-2xl font-bold text-gray-900">
                             ₹{(Number(appointment.totalPrice) || 0) + (appointment.bookingFee ? Number(appointment.bookingFee) : 0)}
                           </div>
-                          {appointment.bookingFee > 0 && (
+                          {Number(appointment.bookingFee) > 0 && (
                             <p className="text-xs text-gray-500">incl. ₹{Number(appointment.bookingFee)} booking fee</p>
                           )}
                         </div>
@@ -581,37 +540,18 @@ const AppointmentsPage: React.FC = () => {
                       )}
 
                       {/* Action Buttons for Past Appointments */}
-                      {activeTab === 'past' && (
+                      {activeTab === 'past' && appointment.status !== 'CANCELLED' && (
                         <div className="flex gap-3 mt-4">
-                          <button className="flex-1 bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 py-3 px-4 rounded-xl text-sm font-semibold hover:from-green-200 hover:to-emerald-200 transition-all shadow-sm">
+                          <button type="button" className="flex-1 bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 py-3 px-4 rounded-xl text-sm font-semibold hover:from-green-200 hover:to-emerald-200 transition-all shadow-sm">
                             Book Again
                           </button>
-                          <button className="flex-1 bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 py-3 px-4 rounded-xl text-sm font-semibold hover:from-yellow-200 hover:to-orange-200 transition-all shadow-sm">
+                          <button type="button" className="flex-1 bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 py-3 px-4 rounded-xl text-sm font-semibold hover:from-yellow-200 hover:to-orange-200 transition-all shadow-sm">
                             Rate & Review
                           </button>
                         </div>
                       )}
                     </div>
                   ))}
-                  {/* Load More Button */}
-                  {hasMore && (
-                    <div className="text-center pt-4">
-                      <button
-                        onClick={loadMoreAppointments}
-                        disabled={loadingMore}
-                        className="px-6 py-3 bg-white text-purple-600 border-2 border-purple-200 rounded-xl font-medium hover:bg-purple-50 transition-colors disabled:opacity-50"
-                      >
-                        {loadingMore ? (
-                          <span className="flex items-center gap-2">
-                            <LoadingSpinner size="sm" />
-                            Loading...
-                          </span>
-                        ) : (
-                          'Load More Appointments'
-                        )}
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

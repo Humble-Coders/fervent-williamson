@@ -26,6 +26,7 @@ const BookingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'completed' | 'cancelled'>('pending');
   const [confirmingBooking, setConfirmingBooking] = useState<string | null>(null);
   const [completingBooking, setCompletingBooking] = useState<string | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState<string | null>(null);
   const [userCodeInput, setUserCodeInput] = useState('');
   const [copiedCodes, setCopiedCodes] = useState<Set<string>>(new Set());
 
@@ -73,6 +74,24 @@ const BookingsPage: React.FC = () => {
     }
   };
 
+  const handleSalonCancelBooking = async (bookingId: string) => {
+    if (
+      !confirm(
+        'Cancel this booking? The customer will receive an email and the booking will move to Cancelled.',
+      )
+    ) {
+      return;
+    }
+    try {
+      setCancellingBooking(bookingId);
+      await bookingService.cancelBooking(bookingId, { cancelledBy: 'SALON' });
+    } catch (err: unknown) {
+      alert((err as Error).message || 'Failed to cancel booking');
+    } finally {
+      setCancellingBooking(null);
+    }
+  };
+
   const handleCompleteBooking = async (bookingId: string) => {
     if (!userCodeInput.trim()) {
       alert('Please enter the user code');
@@ -107,7 +126,7 @@ const BookingsPage: React.FC = () => {
     }
   };
 
-  const filteredBookings = bookings.filter(booking => {
+  const filteredBookings = bookings.filter((booking) => {
     switch (activeTab) {
       case 'pending':
         return booking.status === 'PENDING';
@@ -115,8 +134,10 @@ const BookingsPage: React.FC = () => {
         return booking.status === 'CONFIRMED';
       case 'completed':
         return booking.status === 'COMPLETED';
+      case 'cancelled':
+        return booking.status === 'CANCELLED';
       default:
-        return true;
+        return false;
     }
   });
 
@@ -166,16 +187,18 @@ const BookingsPage: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">Salon Bookings</h1>
 
           {/* Tabs */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg">
             {[
               { id: 'pending', label: 'Pending', count: statusCounts.pending },
               { id: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed },
               { id: 'completed', label: 'Completed', count: statusCounts.completed },
+              { id: 'cancelled', label: 'Cancelled', count: statusCounts.cancelled },
             ].map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id as 'pending' | 'confirmed' | 'completed' | 'cancelled')}
-                className={`flex-1 py-2 px-1 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${activeTab === tab.id
+                className={`py-2 px-1 sm:px-3 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap text-center ${activeTab === tab.id
                     ? 'bg-white text-primary-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                   }`}
@@ -204,9 +227,10 @@ const BookingsPage: React.FC = () => {
             </h3>
             <p className="text-sm sm:text-base text-gray-600 px-4">
               {activeTab === 'pending'
-                ? 'New bookings will appear here for confirmation'
-                : `No ${activeTab} appointments at the moment`
-              }
+                ? 'New bookings will appear here for confirmation or cancellation'
+                : activeTab === 'cancelled'
+                  ? 'Bookings you or the customer cancelled appear here'
+                  : `No ${activeTab} appointments at the moment`}
             </p>
           </div>
         ) : (
@@ -217,8 +241,10 @@ const BookingsPage: React.FC = () => {
                 booking={booking}
                 onConfirm={handleConfirmBooking}
                 onComplete={handleCompleteBooking}
+                onSalonCancel={handleSalonCancelBooking}
                 confirmingBooking={confirmingBooking}
                 completingBooking={completingBooking}
+                cancellingBooking={cancellingBooking}
                 userCodeInput={userCodeInput}
                 setUserCodeInput={setUserCodeInput}
                 copiedCodes={copiedCodes}
@@ -239,8 +265,10 @@ interface BookingCardProps {
   booking: Booking;
   onConfirm: (bookingId: string) => void;
   onComplete: (bookingId: string) => void;
+  onSalonCancel: (bookingId: string) => void;
   confirmingBooking: string | null;
   completingBooking: string | null;
+  cancellingBooking: string | null;
   userCodeInput: string;
   setUserCodeInput: (value: string) => void;
   copiedCodes: Set<string>;
@@ -253,8 +281,10 @@ const BookingCard: React.FC<BookingCardProps> = ({
   booking,
   onConfirm,
   onComplete,
+  onSalonCancel,
   confirmingBooking,
   completingBooking,
+  cancellingBooking,
   userCodeInput,
   setUserCodeInput,
   copiedCodes,
@@ -341,14 +371,24 @@ const BookingCard: React.FC<BookingCardProps> = ({
 
       {/* Price */}
       <div className="mb-4">
-        <span className="text-base sm:text-lg font-semibold text-gray-900">₹{(Number(booking.totalPrice) || 0) + (booking.bookingFee ? Number(booking.bookingFee) : 0)}</span>
+        <span className="text-base sm:text-lg font-semibold text-gray-900">₹{(Number(booking.totalPrice) || 0) + (Number(booking.bookingFee) > 0 ? Number(booking.bookingFee) : 0)}</span>
         <span className="text-xs sm:text-sm text-gray-600 ml-2">
           ({booking.serviceItems?.reduce((sum, i) => sum + i.duration * (i.quantity ?? 1), 0) ?? booking.service?.duration ?? 0} min)
         </span>
-        {booking.bookingFee > 0 && (
+        {Number(booking.bookingFee) > 0 && (
           <span className="text-xs text-gray-500 ml-2">(incl. ₹{Number(booking.bookingFee)} booking fee)</span>
         )}
       </div>
+
+      {booking.status === 'CANCELLED' && booking.cancelledBy && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg">
+          <p className="text-xs sm:text-sm text-red-800">
+            {booking.cancelledBy === 'SALON'
+              ? 'Cancelled by salon'
+              : 'Cancelled by customer'}
+          </p>
+        </div>
+      )}
 
       {/* Notes */}
       {booking.notes && (
@@ -383,27 +423,54 @@ const BookingCard: React.FC<BookingCardProps> = ({
       )}
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
         {booking.status === 'PENDING' && (
-          <Button
-            onClick={() => onConfirm(booking.id)}
-            disabled={confirmingBooking === booking.id}
-            className="w-full sm:flex-1 bg-green-600 hover:bg-green-700 text-sm sm:text-base py-2.5 sm:py-2"
-          >
-            {confirmingBooking === booking.id ? (
-              <>
-                <LoadingSpinner size="sm" className="mr-2" />
-                <span className="hidden sm:inline">Confirming...</span>
-                <span className="sm:hidden">Confirming</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Confirm Booking</span>
-                <span className="sm:hidden">Confirm</span>
-              </>
-            )}
-          </Button>
+          <>
+            <Button
+              onClick={() => onConfirm(booking.id)}
+              disabled={
+                confirmingBooking === booking.id ||
+                cancellingBooking === booking.id
+              }
+              className="w-full sm:flex-1 min-w-0 bg-green-600 hover:bg-green-700 text-sm sm:text-base py-2.5 sm:py-2"
+            >
+              {confirmingBooking === booking.id ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  <span className="hidden sm:inline">Confirming...</span>
+                  <span className="sm:hidden">Confirming</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Confirm Booking</span>
+                  <span className="sm:hidden">Confirm</span>
+                </>
+              )}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => onSalonCancel(booking.id)}
+              disabled={
+                cancellingBooking === booking.id ||
+                confirmingBooking === booking.id
+              }
+              className="w-full sm:flex-1 min-w-0 text-sm sm:text-base py-2.5 sm:py-2"
+            >
+              {cancellingBooking === booking.id ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Cancel booking</span>
+                  <span className="sm:hidden">Cancel</span>
+                </>
+              )}
+            </Button>
+          </>
         )}
 
         {booking.status === 'CONFIRMED' && (
@@ -512,6 +579,38 @@ const mockBookings: Booking[] = [
       id: 'stylist1',
       name: 'Sarah Johnson',
       specialties: ['Coloring', 'Cutting'],
+    },
+  },
+  {
+    id: 'mock3',
+    userId: 'user3',
+    salonId: 'salon1',
+    serviceId: 'service1',
+    date: '2025-01-08',
+    time: '11:00',
+    duration: 45,
+    status: 'CANCELLED',
+    totalPrice: 40,
+    bookingFee: 5,
+    cancelledBy: 'SALON',
+    discount: 0,
+    rescheduleCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    salon: { id: 'salon1', name: 'Demo Salon', address: '123 Main St', phone: '+1234567890', images: [] },
+    user: {
+      id: 'user3',
+      name: 'Alex Lee',
+      email: 'alex@example.com',
+      phone: '+1234567892',
+    },
+    service: {
+      id: 'service1',
+      name: 'Beard trim',
+      description: 'Beard trim',
+      duration: 45,
+      price: 40,
+      category: 'Hair',
     },
   },
 ];

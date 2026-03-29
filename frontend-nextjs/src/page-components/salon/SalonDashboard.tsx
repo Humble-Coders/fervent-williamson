@@ -215,7 +215,7 @@ const SalonDashboard: React.FC = () => {
             </div>
             <div className="mt-4 flex items-center justify-between">
               <span className="text-sm text-gray-500">
-                From {monthlyFees.bookingCount} booking{monthlyFees.bookingCount !== 1 ? 's' : ''} this month
+                From {monthlyFees.bookingCount} confirmed or completed booking{monthlyFees.bookingCount !== 1 ? 's' : ''} this month
               </span>
               <span className="text-sm text-orange-600 font-medium">View Details &rarr;</span>
             </div>

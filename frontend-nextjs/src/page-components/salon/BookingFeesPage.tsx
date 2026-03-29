@@ -99,7 +99,9 @@ const BookingFeesPage: React.FC = () => {
             </Link>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Booking Fees</h1>
-              <p className="text-sm text-gray-500">Platform fees collected per booking</p>
+              <p className="text-sm text-gray-500">
+                Fees for confirmed or completed bookings only (pending excluded)
+              </p>
             </div>
           </div>
         </div>
@@ -244,7 +246,7 @@ const BookingFeesPage: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-semibold text-gray-700">
-                All Bookings ({feesData.bookingCount})
+                Confirmed and completed ({feesData.bookingCount})
               </h3>
             </div>
             {feesData.entries.length === 0 ? (

@@ -75,6 +75,11 @@ export interface BookingFeesData {
   entries: BookingFeeEntry[];
 }
 
+/** Salon has accepted the booking (or service finished). Pending/cancelled excluded. */
+function statusCountsForBookingFees(status: unknown): boolean {
+  return status === 'CONFIRMED' || status === 'COMPLETED';
+}
+
 /**
  * Get the current user's salonId
  */
@@ -254,7 +259,8 @@ class SalonDashboardService {
 
   /**
    * Get booking fees collected by the salon within a date range.
-   * Only includes bookings that actually have the bookingFee field set.
+   * Only includes bookings that have bookingFee set and are CONFIRMED or COMPLETED
+   * (salon accepted or visit completed — not PENDING or CANCELLED).
    */
   async getBookingFees(startDate: string, endDate: string): Promise<BookingFeesData> {
     try {
@@ -277,6 +283,7 @@ class SalonDashboardService {
       });
 
       const bookingsWithFee = allBookings.filter((b) => {
+        if (!statusCountsForBookingFees(b.status)) return false;
         const bookingFeeValue = Number((b as any).bookingFee ?? 0);
         return bookingFeeValue > 0;
       });
@@ -309,6 +316,7 @@ class SalonDashboardService {
 
   /**
    * Real-time listener for booking fees within a date range.
+   * Same rules as getBookingFees: CONFIRMED/COMPLETED only, with bookingFee > 0.
    * Fires immediately with current data then on every change.
    * Returns an unsubscribe function.
    */
@@ -341,6 +349,7 @@ class SalonDashboardService {
             });
 
             const bookingsWithFee = allBookings.filter((b) => {
+              if (!statusCountsForBookingFees(b.status)) return false;
               const bookingFeeValue = Number((b as any).bookingFee ?? 0);
               return bookingFeeValue > 0;
             });

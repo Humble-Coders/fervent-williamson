@@ -101,6 +101,65 @@ export const sendBookingStatusEmail = onDocumentUpdated(
     const previousStatus = beforeData.status;
     const newStatus = afterData.status;
 
+    // ── Cancelled: notify customer (salon or self-cancel) ─────────────────
+    if (newStatus === "CANCELLED" && previousStatus !== "CANCELLED") {
+      const email = afterData?.user?.email;
+      const name = afterData?.user?.name || "Customer";
+      const time = afterData?.time || "";
+      const date = afterData?.date || "";
+      const salonName = afterData?.salon?.name || "the salon";
+      const cancelledBy = afterData?.cancelledBy as string | undefined;
+
+      if (!email) {
+        console.log("No email found for cancelled booking");
+        return;
+      }
+
+      let subject: string;
+      let bodyIntro: string;
+      if (cancelledBy === "SALON") {
+        subject = "Your booking was cancelled by the salon ✂️";
+        bodyIntro =
+          `<p><strong>${salonName}</strong> has cancelled this booking request. ` +
+          `You will not be charged for this appointment.</p>`;
+      } else if (cancelledBy === "USER") {
+        subject = "Your booking cancellation ✂️";
+        bodyIntro =
+          "<p>You have successfully cancelled this booking.</p>";
+      } else {
+        subject = "Your booking has been cancelled ✂️";
+        bodyIntro =
+          "<p>Your booking has been <strong>cancelled</strong>.</p>";
+      }
+
+      const mailOptions = {
+        from: "CutQ <connect@cutq.store>",
+        to: email,
+        subject,
+        html: `
+        <div style="font-family:Arial">
+          <h2>Booking cancelled</h2>
+          <p>Hi ${name},</p>
+          ${bodyIntro}
+          <b>Salon:</b> ${salonName}<br/>
+          <b>Date:</b> ${date}<br/>
+          <b>Time:</b> ${time}<br/><br/>
+          <p>View your appointments anytime in the CutQ app.</p>
+          <p>Thanks for using CutQ 💈</p>
+        </div>
+      `,
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log("✅ Cancellation email sent to", email);
+      } catch (err) {
+        console.error("❌ Cancellation email failed", err);
+      }
+      return;
+    }
+
+    // ── Confirmed by salon ─────────────────────────────────────────────────
     if (previousStatus !== "PENDING" || newStatus !== "CONFIRMED") {
       return;
     }
