@@ -120,8 +120,8 @@ export const sendBookingStatusEmail = onDocumentUpdated(
       if (cancelledBy === "SALON") {
         subject = "Your booking was cancelled by the salon ✂️";
         bodyIntro =
-          `<p><strong>${salonName}</strong> has cancelled this booking request. ` +
-          `You will not be charged for this appointment.</p>`;
+          `<p><strong>${salonName}</strong> has cancelled this ` +
+          "booking request. You will not be charged for this appointment.</p>";
       } else if (cancelledBy === "USER") {
         subject = "Your booking cancellation ✂️";
         bodyIntro =
